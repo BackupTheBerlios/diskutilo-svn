@@ -19,7 +19,7 @@ sub new
     $this->{port} = $config->{port};
     $this->{password} = $config->{password};
     $this->{resource} = $config->{resource};
-    $this->{on_chat} = $config->{on_chat};
+    $this->{on_chat} = $on_chat;
 
     return $this;
 }
@@ -62,7 +62,7 @@ sub Connect {
 #FIXME: move it out of here !
     $this->{process_ID} = Glib::Timeout->add(200, sub {$this->{connection}->Process(0);1;});
 
-    my $jid = $this->{username}."\@".$this->{hostname}."/".$this->{resource};
+    my $jid = $this->{username}."\@".$this->{hostname};#."/".$this->{resource};
     $accounts{$jid} = $this;
     $this->{connection}->Info(name=>"Diskutilo",version=>"v1", os=>"Biduxo");
     return 0;
@@ -82,7 +82,7 @@ sub Disconnect {
     $this->{connection}->Disconnect();
     $this->{connection} = undef;
 
-    my $jid = $this->{username}."@".$this->{hostname}."/".$this->{resource};
+    my $jid = $this->{username}."@".$this->{hostname};#."/".$this->{resource};
     delete $accounts{$jid};
 
     return 0;
@@ -116,7 +116,7 @@ sub jabber_callback_message
 #    my $toJID = $message->GetTo("jid");
     my $from = $message->GetFrom();
     my $to = $message->GetTo();
-
+    $to =~ s!\/.*$!!; # remove any resource suffix from JID
 #    my $from = $fromJID->GetUserID();
 #    my $to = $toJID->GetUserID();
     my $resource = $fromJID->GetResource();
@@ -160,6 +160,8 @@ sub jabber_callback_IQ
     my $iq = shift;
 
     my $to = $iq->GetTo();
+    $to =~ s!\/.*$!!; # remove any resource suffix from JID
+
     my $from = $iq->GetFrom();
     my $type = $iq->GetType();
 
