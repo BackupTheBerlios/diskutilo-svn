@@ -4,13 +4,12 @@ use warnings;
 use Net::Jabber qw (Client);
 use Data::Dumper;
 
-#we cannot have to connections to the same account:
+#we cannot have two connections to the same account:
 # fix it by adding resource in the hash key of %account.
 
 #Imagine un lien vers une chatroom pour discuter de la page en cours
 #A coté du lien, il pourait etre affiché le nombre de membres et les
 #dernière choses qui ont été dites, tout simple, non ?
-
 
 my %accounts = ();
 
@@ -18,6 +17,7 @@ sub new {
     my ($class, $config, $diskutilo) = @_;
     my $this = {};
     bless($this, $class);
+
     $this->{connection} = undef;
     $this->{username} = $config->{username};
     $this->{hostname} = $config->{hostname};
@@ -25,6 +25,7 @@ sub new {
     $this->{password} = $config->{password};
     $this->{resource} = $config->{resource};
     $this->{diskutilo} = $diskutilo;
+
     $accounts{$this->{username}."\@".$this->{hostname}} = $this;
     return $this;
 }

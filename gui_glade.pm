@@ -54,7 +54,7 @@ my @diskutilo_xpm = (
 
 sub ontop {
     my ($win) = @_;
-    $win->show;
+    $win->show_all;
     my $gdkwin = $win->window;
     $gdkwin->focus(1);
 }
@@ -107,7 +107,7 @@ sub new {
 
     #MAIN
     $this->{main}->{win} = $this->{glade}->get_widget ('main');
-    $this->{main}->{win}->signal_connect (destroy => sub{Gtk2->main_quit;1});
+    $this->{main}->{win}->signal_connect (delete_event => sub{on_delete_hide(@_);1});
     $this->{main}->{add} = $this->{glade}->get_widget ('main_add');
     $this->{main}->{add}->signal_connect (clicked => sub{$this->on_add_show;1});
     $this->{main}->{state} = $this->{glade}->get_widget ('main_state');
@@ -138,13 +138,18 @@ sub new {
     #
     $this->{main}->{contacts}->{treeview}->show_all;
 
-    $this->{icon} = Gtk2::TrayIcon->new("test");
+    # create tray icon
+    my $icon = Gtk2::TrayIcon->new('Diskutilo');
+    my $iconEB = Gtk2::EventBox->new;
+    # attach event to tray icon to show menu
+    $iconEB->signal_connect("button-release-event", sub{$this->on_icon_menu(@_);1});
+    # adding tray icon image
     my $pixbuf = Gtk2::Gdk::Pixbuf->new_from_xpm_data (@diskutilo_xpm);
     my $image = Gtk2::Image->new_from_pixbuf ($pixbuf);
-    $this->{icon}->add($image);
-    $this->{icon}->show_all;
-    $this->{icon}->signal_connect(event => sub{$this->on_icon_menu(@_);1});
-    $image->signal_connect(event => sub{$this->on_icon_menu(@_);1});
+    $iconEB->add($image);
+    $icon->add($iconEB);
+    $icon->show_all;
+
     $this->{chat_wins} = ();
 
     $this->{diskutilo} = $diskutilo;
@@ -187,25 +192,25 @@ sub main {
 sub on_icon_menu {
     my ($this, $widget, $event) = @_;
 
-#print "on_icon_menu: " . $event->type . "\n";
-    #afficher les properties.
-    return undef;
+    print "on_icon_menu: " . $event->type . "\n";
 
     if($event->button() == 3) {
 	my $menu = Gtk2::Menu->new();
-	menu_append($menu, "Delete", sub{1});
+	menu_append($menu, "Quit", sub{Gtk2->main_quit;1});
 	my $submenu = Gtk2::Menu->new();
-	menu_append($submenu, "OffLine", sub{$this->{diskutilo}->set_state("offline");1});
-	menu_append($submenu, "xa", sub{$this->{diskutilo}->set_state("xa");1});
-	menu_append($submenu, "dnd", sub{$this->{diskutilo}->set_state("dnd");1});
-	menu_append($submenu, "away", sub{$this->{diskutilo}->set_state("away");1});
-	menu_append($submenu, "Chat", sub{$this->{diskutilo}->set_state("chat");1});
-	menu_append($submenu, "Online", sub{$this->{diskutilo}->set_state("online");1});
+	menu_append($submenu, "OffLine", sub{$this->{diskutilo}->set_global_state("offline");1});
+	menu_append($submenu, "xa", sub{$this->{diskutilo}->set_global_state("xa");1});
+	menu_append($submenu, "dnd", sub{$this->{diskutilo}->set_global_state("dnd");1});
+	menu_append($submenu, "away", sub{$this->{diskutilo}->set_global_state("away");1});
+	menu_append($submenu, "Chat", sub{$this->{diskutilo}->set_global_state("chat");1});
+	menu_append($submenu, "Online"=>sub{$this->{diskutilo}->set_global_state("online");1});
 	menu_append($menu, "State", $submenu);
 	$menu->popup(undef, undef, undef, undef, $event->button,$event->time);
 	return 1;
+    } elsif ($event->button() == 1) {
+	ontop($this->{main}->{win});
     }
-    return undef;
+    return 1;
 }
 
 sub add_account {
@@ -315,7 +320,7 @@ sub config_commit {
 sub on_add_show {
     my ($this) = @_;
     $this->{add}->{account}->{port}->set_text("5222");
-    $this->{add}->{account}->{resource}->set_text("diskutilo");    
+    $this->{add}->{account}->{resource}->set_text("Diskutilo");
     ontop($this->{add}->{win});
 }
 

@@ -14,8 +14,8 @@ my $diskutilo = main->new;
 $diskutilo->{config} = $diskutilo->read_config($config_file_name);
 $diskutilo->{gui} = gui_glade->new($diskutilo->{config}->{gui}, $diskutilo);
 if(defined($diskutilo->{config}->{accounts})) {
-    foreach (keys(%{$diskutilo->{config}->{accounts}})) {	
-	$this->{gui}->add_account($ajid, $config->{name}, sub{$this->{jabber}->{$ajid}->Process;1});
+    foreach (keys(%{$diskutilo->{config}->{accounts}})) {
+	$diskutilo->open_account($_, $diskutilo->{config}->{accounts}->{$_});
     }
 }
 $diskutilo->{gui}->main;
@@ -34,6 +34,7 @@ sub new {
 
 sub set_global_state {
     my ($this, $state) = @_;
+    print "set_global_state : $state\n";
     $this->set_account_state($_, $state) foreach (keys(%{$this->{jabber}}));
 }
 
@@ -46,16 +47,22 @@ sub read_config {
 }
 
 #ACCOUNT
-sub add_account {
+sub open_account {
     my ($this, $ajid, $config) = @_;
     $this->{jabber}->{$ajid} = jabber->new($config, $this);
+    $this->{gui}->add_account($ajid, $config->{name}, sub{$this->{jabber}->{$ajid}->Process;1});
+}
+
+sub add_account {
+    my ($this, $ajid, $config) = @_;
     $this->{config}->{accounts}->{$ajid} = $config;
     XMLout($this->{config}, KeyAttr => "key", OutputFile => $config_file_name);
-    $this->{gui}->add_account($ajid, $config->{name});
+    $this->open_account($ajid, $config);
 }
 
 sub set_account_state {
     my ($this, $ajid, $state) = @_;
+    print "account $ajid : $state\n";
     return -1 if(!defined($this->{jabber}->{$ajid}));
     return -1 if($this->{jabber}->{$ajid}->set_state($state, "") == -1);
     $this->{gui}->set_account_state($ajid, $state);
