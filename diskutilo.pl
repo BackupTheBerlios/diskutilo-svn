@@ -185,6 +185,7 @@ sub open_chat {
     $vbox->add ($scroller);
     my $recv = Gtk2::TextView->new;
     $recv->set (editable => 0);
+    $recv->set_cursor_visible (0);
     $recv->set (wrap_mode => "word");	
     $scroller->add ($recv);
     my $send = Gtk2::Entry->new;
@@ -209,6 +210,18 @@ sub on_contacts_row_activated {
     return 1; # consume event
 }
 
+sub chat_add_text {
+    my ($account, $jid, $text) = @_;
+
+    open_chat($account, $jid) if(!exists $chatwin{$jid});
+
+    my $buffer = $chatwin{$jid}[1]->get_buffer;
+    my $iter = $buffer->get_end_iter;
+    $buffer->insert($iter, $text . "\n");
+    $chatwin{$jid}[1]->forward_display_line_end ($iter);
+}
+
+
 sub on_chat_key {
     my ($widget, $event, $data) = @_;
     my ($account, $jid) = @{$data};
@@ -221,9 +234,7 @@ sub on_chat_key {
 	{
 	    $widget->set_text("");
 	    $account->send_chat($jid, $body);
-	    my $buffer = $chatwin{$jid}[1]->get_buffer;
-	    my $iter = $buffer->get_end_iter;
-	    $buffer->insert($iter, "moi: " . $body . "\n");
+	    chat_add_text($account, $jid, "mi : " . $body);
 	}
 	return 1; # consume keypress
     }
@@ -239,8 +250,5 @@ sub on_chat_key {
 sub on_chat {
     my ($account, $jid, $body) = @_;
     $jid =~ s!\/.*$!!; # remove any resource suffix from JID
-    open_chat($account, $jid) if(!exists $chatwin{$jid});
-    my $buffer = $chatwin{$jid}[1]->get_buffer;
-    my $iter = $buffer->get_end_iter;
-    $buffer->insert($iter, $jid . ": " . $body . "\n");
+    chat_add_text($account, $jid, $jid . ": " . $body);
 }
