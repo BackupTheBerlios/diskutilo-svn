@@ -6,20 +6,20 @@ use Net::Jabber qw (Client);
 #A coté du lien, il pourait etre affiché le nombre de membres et les
 #dernière choses qui ont été dites, tout simple, non ?
 
-my %accounts = {};
+my %accounts = ();
 
 sub new
 {
-    my ($class,$username,$hostname,$port,$password,$resource, $on_chat) = @_;
+    my ($class, $config, $on_chat) = @_;
     my $this = {};
     bless($this, $class);
     $this->{connection} = undef;
-    $this->{username} = $username;
-    $this->{hostname} = $hostname;
-    $this->{port} = $port;
-    $this->{password} = $password;
-    $this->{resource} = $resource;
-    $this->{on_chat} = $on_chat;
+    $this->{username} = $config->{username};
+    $this->{hostname} = $config->{hostname};
+    $this->{port} = $config->{port};
+    $this->{password} = $config->{password};
+    $this->{resource} = $config->{resource};
+    $this->{on_chat} = $config->{on_chat};
 
     return $this;
 }
@@ -59,6 +59,7 @@ sub Connect {
 	iq => \&jabber_callback_IQ);
 
     $this->{connection}->PresenceSend(type=>"available", show=>"available");
+#FIXME: move it out of here !
     $this->{process_ID} = Glib::Timeout->add(200, sub {$this->{connection}->Process(0);1;});
 
     my $jid = $this->{username}."\@".$this->{hostname}."/".$this->{resource};

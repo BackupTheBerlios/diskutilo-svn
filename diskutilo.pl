@@ -8,9 +8,25 @@ use Gtk2 '-init'; # auto-initialize Gtk2
 use Gtk2::GladeXML;
 use Gtk2::SimpleList;   # easy wrapper for list views
 use Gtk2::Gdk::Keysyms; # keyboard code constants
+use XML::Simple qw(:strict);
+use Data::Dumper;
 use jabber;
 
-use open ":utf8";
+#use open ":utf8";
+
+#my %config;
+#%accounts by jid
+#   $username
+#   $hostname
+#   $port
+#   $resource
+#   $password
+
+my %diskutilo;
+#%UI
+#   $glade
+#   $main_main
+#   $conf_win
 
 my $glade;
 my $main_win;
@@ -26,11 +42,21 @@ my $add_account_port;
 my $add_account_resource;
 my $add_account_password;
 
+my $config_accounts_username;
+my $config_accounts_hostname;
+my $config_accounts_port;
+my $config_accounts_resource;
+my $config_accounts_password;
+
 my $add_contact_jid;
 my $add_contact_name;
 my $add_contact_group;
 
-my %chatwin = ();
+my $config_accounts_account;
+
+my $jabber;
+
+my %chat_wins = ();
 
 # Roster:
 #jabber: jid, name, subs, groups
@@ -39,9 +65,20 @@ my %chatwin = ();
 
 #Je doit pouvoir retrouver un contact dans ma liste 
 
-#my $jabber = jabber->new("fred", "megavac.ath.cx", "5222", "rigili", "diskutilo", \&on_chat);
-my $jabber = jabber->new("megavac", "megavac.ath.cx", "5222", "huHuhu", "diskutilo", \&on_chat);
-#my $jabber = jabber->new("fremo", "jabber.org", "5222", "", "diskutilo");
+my $config_file_name = "config";
+my $config = XMLin($config_file_name, ForceArray => 1, KeyAttr => "key");
+if(defined($config->{accounts}))
+{
+    foreach (keys(%{$config->{accounts}}))
+    {
+	my $account = $config->{accounts}->{$_};
+	my $jid = $account->{username} . "\@" . $account->{hostname};
+	print "Account: $jid\n";
+#    %diskutilo->{jabber} = 
+	$jabber = jabber->new($account, \&on_chat);
+    }
+}
+print Dumper($config);
 $glade = Gtk2::GladeXML->new("diskutilo.glade");
 $glade->signal_autoconnect_from_package('main');
 init_gui();
@@ -53,9 +90,25 @@ sub init_gui {
     $conf_win = $glade->get_widget('config');
     $add_win  = $glade->get_widget('add');
     $add_nb  = $glade->get_widget('add_nb');
+
     $add_contact_jid = $glade->get_widget('add_contact_jid');
     $add_contact_name = $glade->get_widget('add_contact_name');
     $add_contact_group = $glade->get_widget('add_contact_group');
+
+    $add_account_username = $glade->get_widget('add_account_username');
+    $add_account_hostname = $glade->get_widget('add_account_hostname');
+    $add_account_port = $glade->get_widget('add_account_port');
+    $add_account_resource = $glade->get_widget('add_account_resource');
+    $add_account_password = $glade->get_widget('add_account_password');
+
+    $config_accounts_username = $glade->get_widget('config_accounts_username');
+    $config_accounts_hostname = $glade->get_widget('config_accounts_hostname');
+    $config_accounts_port = $glade->get_widget('config_accounts_port');
+    $config_accounts_resource = $glade->get_widget('config_accounts_resource');
+    $config_accounts_password = $glade->get_widget('config_accounts_password');
+
+    $config_accounts_account = $glade->get_widget('config_accounts_account');
+
     $state   = $glade->get_widget('state');
 
     my $TV = $glade->get_widget('contacts');
@@ -81,6 +134,10 @@ sub init_gui {
 }
 
 sub diskutilo_connect {
+#FIXME: Account
+#    my $jabber = %diskutilo->{jabber}
+
+    return -1 if(!defined($jabber));
     $jabber->Connect() ne -1 or return -1;
 
     if($jabber->Get_roster() == -1)
@@ -97,6 +154,10 @@ sub diskutilo_connect {
 }
 
 sub diskutilo_disconnect {
+#FIXME: Account
+#    my $jabber = %diskutilo->{jabber}
+
+    return 0 if(!defined($jabber));
     Glib::Source->remove($jabber->{process_ID}) if(defined($jabber->{process_ID}));
       $contacts->clear;
       $jabber->Disconnect();
@@ -116,8 +177,34 @@ sub on_state_changed {
 }
 
 sub on_main_config_button_clicked {
+    $config_accounts_account->remove_text(0) while $config_accounts_account->get_model()->iter_n_children() != 0;
+
+    if(defined($config->{accounts}))
+    {
+	foreach ($config->{accounts})
+	{
+	    my $jid = $_->{username} . "\@" . $_->{hostname};
+	    $config_accounts_account->append_text($jid);
+	}
+	$config_accounts_account->set_active(0);
+    }
+
     $conf_win->show;
 #    $conf_win->on_top;
+}
+
+sub on_config_accounts_account_changed {
+    my $model = $config_accounts_account->get_model;
+    my $iter = $config_accounts_account->get_active_iter;
+    my ($jid) = $model->get_value($iter);
+
+    print "jid: $jid\n";
+
+  $config_accounts_username->set_text($config->{accounts}->{$jid}->{username});
+  $config_accounts_hostname->set_text($config->{accounts}->{$jid}->{hostname});
+  $config_accounts_port->set_text($config->{accounts}->{$jid}->{port});
+  $config_accounts_resource->set_text($config->{accounts}->{$jid}->{resource});
+  $config_accounts_password->set_text($config->{accounts}->{$jid}->{password});
 }
 
 sub on_main_add_button_clicked {
@@ -135,7 +222,23 @@ sub on_add_delete_event {
     1;#consume this event!
 }
 
+sub fill_it {
+    my ($widget, $field_name) = @_;
+
+    my $dialog = Gtk2::Dialog->new ('Message', $main_win, 'destroy-with-parent', 'gtk-ok' => 'none');
+    my $label = Gtk2::Label->new ("You have to specify a " . $field_name);
+    $dialog->vbox->add ($label);
+    $dialog->signal_connect (response => sub { $_[0]->destroy });
+    $dialog->show_all;
+
+    $widget->grab_focus;
+
+    return 1;
+}
+
 sub on_add_button_clicked {
+#FIXME: Account
+#    my $jabber = %diskutilo->{jabber}
     my $jid = $add_contact_jid->get_text();
     my $name = $add_contact_name->get_text();
 
@@ -144,6 +247,32 @@ sub on_add_button_clicked {
     if($page == 0)
     {
 	print "add account\n";
+
+	my $username = $add_account_username->get_text();
+	my $hostname = $add_account_hostname->get_text();
+	my $port     = $add_account_port->get_text();
+	my $resource = $add_account_resource->get_text();
+	my $password = $add_account_password->get_text();
+
+	return fill_it($add_account_username, "username") if($username eq "");
+	return fill_it($add_account_hostname, "hostname") if($hostname eq "");
+	$port = 5222 if($port eq "");
+	$resource = "Diskutilo" if($resource eq "");
+
+	my $jid = $username . "\@" . $hostname;
+
+	$config->{accounts}=() if(!defined($config->{accounts}));
+	$config->{accounts}->{$jid}=();
+
+	$config->{accounts}->{$jid}->{username} = $username;
+	$config->{accounts}->{$jid}->{hostname} = $hostname;
+	$config->{accounts}->{$jid}->{port} = $port;
+	$config->{accounts}->{$jid}->{resource} = $resource;
+	$config->{accounts}->{$jid}->{password} = $password;
+
+#	print Dumper($config);
+
+	print "config: " . XMLout($config, KeyAttr => "key", OutputFile => $config_file_name) . "\n";
     }
     elsif($page == 1)
     {
@@ -171,7 +300,7 @@ sub on_config_delete_event {
 sub on_chat_delete {
     my ($widget, $event, $data) = @_;
     my ($jabber, $jid) = @{$data};
-    delete $chatwin{$jid};
+    delete $chat_wins{$jid};
     0;
 }
 
@@ -201,20 +330,20 @@ sub open_chat {
     $vbox->pack_start ($send, 0, 0, 0);
     $send->grab_focus();
     $chat->show_all;
-    $chatwin{$jid} = [$chat, $recv];
+    $chat_wins{$jid} = [$chat, $recv];
 }
 
 sub on_contacts_row_activated {
-    my $widget = shift;
+    my ($widget) = @_;
 
     my ($path) = $widget->get_cursor;
 
     my $iter = $contacts->get_iter ($path);
     my ($jid) = $contacts->get ($iter, 0);
 
-    if(exists ($chatwin{$jid}))
+    if(exists ($chat_wins{$jid}))
     {
-	#put chatwin on top;
+	#put chat_wins on top;
     }
     else
     {
@@ -226,8 +355,8 @@ sub on_contacts_row_activated {
 sub chat_add_text {
     my ($jabber, $jid, $text) = @_;
 
-    open_chat($jabber, $jid) if(!exists $chatwin{$jid});
-    my $TV = $chatwin{$jid}[1];
+    open_chat($jabber, $jid) if(!exists $chat_wins{$jid});
+    my $TV = $chat_wins{$jid}[1];
     my $buffer = $TV->get_buffer;
     my $iter = $buffer->get_end_iter;
     $buffer->insert($iter, $text . "\n");
@@ -238,6 +367,8 @@ sub chat_add_text {
 sub on_chat_key {
     my ($widget, $event, $data) = @_;
     my ($jabber, $jid) = @{$data};
+
+    print "jabber: $jabber\n";
 
     my $keypress = $event->keyval;    
     if ($keypress == $Gtk2::Gdk::Keysyms{KP_Enter} ||
@@ -253,8 +384,8 @@ sub on_chat_key {
     }
 
     if ($keypress == $Gtk2::Gdk::Keysyms{Escape}) {
-	$chatwin{$jid}[0]->destroy;
-	delete $chatwin{$jid};
+	$chat_wins{$jid}[0]->destroy;
+	delete $chat_wins{$jid};
 	return 1; # consume keypress
     }
     return 0; # let gtk have the keypress
@@ -265,7 +396,6 @@ sub on_chat {
     $jid =~ s!\/.*$!!; # remove any resource suffix from JID
     my $name = $jid;
 
-    my $name = $jabber->{roster}->{$jid}->{name}
-    if(defined($jabber->{roster}->{$jid}->{name}));
+    $name = $jabber->{roster}->{$jid}->{name} if(defined($jabber->{roster}->{$jid}->{name}));
     chat_add_text($jabber, $jid, $name . ": " . $body);
 }
