@@ -27,8 +27,6 @@ sub new
 sub Connect {
     my ($this) = @_;
 
-    print "this: $this\n";
-
     if(defined $this->{connection})
     {
 	print "Already connected Coco ! ($!)\n";
@@ -58,7 +56,7 @@ sub Connect {
 	presence => \&jabber_callback_presence,
 	iq => \&jabber_callback_IQ);
 
-    $this->{connection}->PresenceSend(type=>"available", show=>"available");
+    $this->{connection}->PresenceSend(show=>"away");
 #FIXME: move it out of here !
     $this->{process_ID} = Glib::Timeout->add(200, sub {$this->{connection}->Process(0);1;});
 
@@ -146,11 +144,8 @@ sub jabber_callback_presence
     my $from = $presence->GetFrom();
     my $type = $presence->GetType();
     my $status = $presence->GetStatus();
-    print "===Presence\n";
-    print "  From $from\n";
-    print "  Type: $type\n";
-    print "  Status: $status\n";
-    print $presence->GetXML(),"\n";
+    print "===Presence: $from: $type: $status\n";
+#    print $presence->GetXML(),"\n";
 #    print "===\n";
 }
 
@@ -165,15 +160,13 @@ sub jabber_callback_IQ
     my $from = $iq->GetFrom();
     my $type = $iq->GetType();
 
-    print "===IQ\n";
-    print "  From $from\n";
-    print "  Type: $type\n";
+    print "===IQ: $from: $type\n";
 
     my $query = $iq->GetQuery();
     if(defined $query)
     {
 	my $xmlns = $query->GetXMLNS();
-	print "  XMLNS: \"$xmlns\"\n";
+#	print "  XMLNS: \"$xmlns\"\n";
 
 	if($type eq "get")
 	{
@@ -182,7 +175,7 @@ sub jabber_callback_IQ
 	    
 	    if($xmlns eq "jabber:iq:version")
 	    {
-		print "RQ: $reply_query\n";
+#		print "RQ: $reply_query\n";
 #		my $item = $reply_query->AddItem();
 #		$item->SetItem(os => "Bidux");
 #		$reply_query->SetOS(); #Net::jabber do not allow us to modify it...

@@ -4,6 +4,8 @@
 <glade-interface>
 
 <widget class="GtkWindow" id="main">
+  <property name="width_request">200</property>
+  <property name="height_request">130</property>
   <property name="visible">True</property>
   <property name="title" translatable="yes">Diskutilo</property>
   <property name="type">GTK_WINDOW_TOPLEVEL</property>
@@ -34,14 +36,14 @@
 	  <property name="window_placement">GTK_CORNER_TOP_LEFT</property>
 
 	  <child>
-	    <widget class="GtkTreeView" id="contacts">
+	    <widget class="GtkTreeView" id="main_contacts">
 	      <property name="visible">True</property>
 	      <property name="can_focus">True</property>
 	      <property name="headers_visible">False</property>
 	      <property name="rules_hint">False</property>
 	      <property name="reorderable">False</property>
 	      <property name="enable_search">True</property>
-	      <signal name="row_activated" handler="on_contacts_row_activated" after="yes" last_modification_time="Fri, 13 Aug 2004 16:26:20 GMT"/>
+	      <signal name="row_activated" handler="on_main_contacts_row_activated" after="yes" last_modification_time="Sun, 22 Aug 2004 20:55:16 GMT"/>
 	    </widget>
 	  </child>
 	</widget>
@@ -119,11 +121,14 @@
 	      <property name="above_child">False</property>
 
 	      <child>
-		<widget class="GtkComboBox" id="state">
+		<widget class="GtkComboBox" id="main_state">
 		  <property name="visible">True</property>
-		  <property name="items" translatable="yes">Connected
+		  <property name="items" translatable="yes">Chat
+Away
+DnD
+XA
 Disconnected</property>
-		  <signal name="changed" handler="on_state_changed" last_modification_time="Fri, 13 Aug 2004 02:08:58 GMT"/>
+		  <signal name="changed" handler="on_main_state_changed" last_modification_time="Sun, 22 Aug 2004 20:54:08 GMT"/>
 		</widget>
 	      </child>
 	    </widget>
@@ -922,7 +927,7 @@ Disconnected
 	  <child>
 	    <widget class="GtkTable" id="table3">
 	      <property name="visible">True</property>
-	      <property name="n_rows">5</property>
+	      <property name="n_rows">7</property>
 	      <property name="n_columns">2</property>
 	      <property name="homogeneous">False</property>
 	      <property name="row_spacing">0</property>
@@ -1152,6 +1157,72 @@ Disconnected
 		  <property name="y_options"></property>
 		</packing>
 	      </child>
+
+	      <child>
+		<widget class="GtkCheckButton" id="add_account_auto_reconnect">
+		  <property name="visible">True</property>
+		  <property name="can_focus">True</property>
+		  <property name="has_focus">True</property>
+		  <property name="label" translatable="yes">Auto reconnect</property>
+		  <property name="use_underline">True</property>
+		  <property name="relief">GTK_RELIEF_NORMAL</property>
+		  <property name="focus_on_click">True</property>
+		  <property name="active">False</property>
+		  <property name="inconsistent">False</property>
+		  <property name="draw_indicator">True</property>
+		</widget>
+		<packing>
+		  <property name="left_attach">1</property>
+		  <property name="right_attach">2</property>
+		  <property name="top_attach">6</property>
+		  <property name="bottom_attach">7</property>
+		  <property name="x_options">fill</property>
+		  <property name="y_options"></property>
+		</packing>
+	      </child>
+
+	      <child>
+		<widget class="GtkLabel" id="label39">
+		  <property name="visible">True</property>
+		  <property name="label" translatable="yes">Default state</property>
+		  <property name="use_underline">False</property>
+		  <property name="use_markup">False</property>
+		  <property name="justify">GTK_JUSTIFY_LEFT</property>
+		  <property name="wrap">False</property>
+		  <property name="selectable">False</property>
+		  <property name="xalign">0</property>
+		  <property name="yalign">0.5</property>
+		  <property name="xpad">0</property>
+		  <property name="ypad">0</property>
+		</widget>
+		<packing>
+		  <property name="left_attach">0</property>
+		  <property name="right_attach">1</property>
+		  <property name="top_attach">5</property>
+		  <property name="bottom_attach">6</property>
+		  <property name="x_options"></property>
+		  <property name="y_options">fill</property>
+		</packing>
+	      </child>
+
+	      <child>
+		<widget class="GtkComboBox" id="add_account_state">
+		  <property name="visible">True</property>
+		  <property name="items" translatable="yes">Chat
+Away
+DnD
+XA
+Disconnected</property>
+		</widget>
+		<packing>
+		  <property name="left_attach">1</property>
+		  <property name="right_attach">2</property>
+		  <property name="top_attach">5</property>
+		  <property name="bottom_attach">6</property>
+		  <property name="x_options">expand|shrink|fill</property>
+		  <property name="y_options">shrink|fill</property>
+		</packing>
+	      </child>
 	    </widget>
 	    <packing>
 	      <property name="tab_expand">False</property>
@@ -1185,7 +1256,7 @@ Disconnected
 	      <property name="spacing">0</property>
 
 	      <child>
-		<widget class="GtkComboBox" id="combobox4">
+		<widget class="GtkComboBox" id="add_contact_account">
 		  <property name="visible">True</property>
 		  <property name="can_default">True</property>
 		  <property name="has_default">True</property>
@@ -1387,43 +1458,6 @@ Disconnected
 		      </child>
 
 		      <child>
-			<widget class="GtkLabel" id="label29">
-			  <property name="visible">True</property>
-			  <property name="label" translatable="yes">group</property>
-			  <property name="use_underline">False</property>
-			  <property name="use_markup">False</property>
-			  <property name="justify">GTK_JUSTIFY_LEFT</property>
-			  <property name="wrap">False</property>
-			  <property name="selectable">False</property>
-			  <property name="xalign">0</property>
-			  <property name="yalign">0.5</property>
-			  <property name="xpad">0</property>
-			  <property name="ypad">0</property>
-			</widget>
-			<packing>
-			  <property name="left_attach">0</property>
-			  <property name="right_attach">1</property>
-			  <property name="top_attach">2</property>
-			  <property name="bottom_attach">3</property>
-			  <property name="x_options">fill</property>
-			  <property name="y_options"></property>
-			</packing>
-		      </child>
-
-		      <child>
-			<widget class="GtkComboBoxEntry" id="add_contact_group">
-			  <property name="visible">True</property>
-			</widget>
-			<packing>
-			  <property name="left_attach">1</property>
-			  <property name="right_attach">2</property>
-			  <property name="top_attach">2</property>
-			  <property name="bottom_attach">3</property>
-			  <property name="y_options">fill</property>
-			</packing>
-		      </child>
-
-		      <child>
 			<widget class="GtkEntry" id="add_contact_name">
 			  <property name="visible">True</property>
 			  <property name="can_focus">True</property>
@@ -1474,7 +1508,7 @@ Disconnected
 			    <widget class="GtkButton" id="add_contact_lookup">
 			      <property name="visible">True</property>
 			      <property name="can_focus">True</property>
-			      <property name="label" translatable="yes">lookup</property>
+			      <property name="label" translatable="yes">lookup JUD</property>
 			      <property name="use_underline">True</property>
 			      <property name="relief">GTK_RELIEF_NORMAL</property>
 			      <property name="focus_on_click">True</property>
@@ -1513,10 +1547,65 @@ Disconnected
 			<packing>
 			  <property name="left_attach">0</property>
 			  <property name="right_attach">1</property>
+			  <property name="top_attach">2</property>
+			  <property name="bottom_attach">3</property>
+			  <property name="x_options">fill</property>
+			  <property name="y_options"></property>
+			</packing>
+		      </child>
+
+		      <child>
+			<widget class="GtkLabel" id="label29">
+			  <property name="visible">True</property>
+			  <property name="label" translatable="yes">groups</property>
+			  <property name="use_underline">False</property>
+			  <property name="use_markup">False</property>
+			  <property name="justify">GTK_JUSTIFY_LEFT</property>
+			  <property name="wrap">False</property>
+			  <property name="selectable">False</property>
+			  <property name="xalign">0</property>
+			  <property name="yalign">0.5</property>
+			  <property name="xpad">0</property>
+			  <property name="ypad">0</property>
+			</widget>
+			<packing>
+			  <property name="left_attach">0</property>
+			  <property name="right_attach">1</property>
 			  <property name="top_attach">3</property>
 			  <property name="bottom_attach">4</property>
 			  <property name="x_options">fill</property>
 			  <property name="y_options"></property>
+			</packing>
+		      </child>
+
+		      <child>
+			<widget class="GtkScrolledWindow" id="scrolled423">
+			  <property name="visible">True</property>
+			  <property name="can_focus">True</property>
+			  <property name="hscrollbar_policy">GTK_POLICY_NEVER</property>
+			  <property name="vscrollbar_policy">GTK_POLICY_AUTOMATIC</property>
+			  <property name="shadow_type">GTK_SHADOW_IN</property>
+			  <property name="window_placement">GTK_CORNER_TOP_LEFT</property>
+
+			  <child>
+			    <widget class="GtkTreeView" id="add_contact_groups">
+			      <property name="border_width">6</property>
+			      <property name="visible">True</property>
+			      <property name="can_focus">True</property>
+			      <property name="headers_visible">False</property>
+			      <property name="rules_hint">False</property>
+			      <property name="reorderable">False</property>
+			      <property name="enable_search">True</property>
+			    </widget>
+			  </child>
+			</widget>
+			<packing>
+			  <property name="left_attach">1</property>
+			  <property name="right_attach">2</property>
+			  <property name="top_attach">3</property>
+			  <property name="bottom_attach">4</property>
+			  <property name="x_options">fill</property>
+			  <property name="y_options">fill</property>
 			</packing>
 		      </child>
 
@@ -1531,8 +1620,8 @@ None</property>
 			<packing>
 			  <property name="left_attach">1</property>
 			  <property name="right_attach">2</property>
-			  <property name="top_attach">3</property>
-			  <property name="bottom_attach">4</property>
+			  <property name="top_attach">2</property>
+			  <property name="bottom_attach">3</property>
 			  <property name="x_options">fill</property>
 			  <property name="y_options">fill</property>
 			</packing>
@@ -1584,7 +1673,7 @@ None</property>
 	      <property name="spacing">0</property>
 
 	      <child>
-		<widget class="GtkComboBox" id="combobox5">
+		<widget class="GtkComboBox" id="add_transport_account">
 		  <property name="visible">True</property>
 		</widget>
 		<packing>
@@ -1628,7 +1717,7 @@ None</property>
 		      </child>
 
 		      <child>
-			<widget class="GtkComboBoxEntry" id="transport_url">
+			<widget class="GtkComboBoxEntry" id="add_transport_url">
 			  <property name="visible">True</property>
 			</widget>
 			<packing>
@@ -1639,7 +1728,7 @@ None</property>
 		      </child>
 
 		      <child>
-			<widget class="GtkButton" id="transport_go">
+			<widget class="GtkButton" id="add_transport_go">
 			  <property name="visible">True</property>
 			  <property name="can_focus">True</property>
 			  <property name="relief">GTK_RELIEF_NORMAL</property>
@@ -1729,7 +1818,7 @@ None</property>
 		      <property name="window_placement">GTK_CORNER_TOP_LEFT</property>
 
 		      <child>
-			<widget class="GtkTreeView" id="transport_tv">
+			<widget class="GtkTreeView" id="add_transport_tv">
 			  <property name="visible">True</property>
 			  <property name="can_focus">True</property>
 			  <property name="headers_visible">False</property>
