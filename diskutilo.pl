@@ -13,19 +13,31 @@ use jabber;
 use open ":utf8";
 
 my $glade;
-my $mainwin;
-my $confwin;
-my $addwin;
+my $main_win;
+my $conf_win;
+my $add_win;
+my $add_nb;
 my $state;
 my $contacts;
 
-my $username_widget;
-my $hostname_widget;
-my $port_widget;
-my $resource_widget;
-my $password_widget;
+my $add_account_username;
+my $add_account_hostname;
+my $add_account_port;
+my $add_account_resource;
+my $add_account_password;
+
+my $add_contact_jid;
+my $add_contact_name;
+my $add_contact_group;
 
 my %chatwin = ();
+
+# Roster:
+#jabber: jid, name, subs, groups
+#gtk: group- name, presence.
+#diskutilo: $jid, $name, @groups, [$presence, $resources, $prio, $info], vcard.
+
+#@account
 
 my $account = jabber->new("megavac", "megavac.ath.cx", "5222", "huHuhu", "diskutilo", \&on_chat);
 #my $account = jabber->new("fremo", "jabber.org", "5222", "", "diskutilo");
@@ -36,20 +48,14 @@ Gtk2->main;
 exit 0;
 
 sub init_gui {
-    $mainwin = $glade->get_widget('main');
-    $confwin = $glade->get_widget('config');
-    $addwin  = $glade->get_widget('add');
+    $main_win = $glade->get_widget('main');
+    $conf_win = $glade->get_widget('config');
+    $add_win  = $glade->get_widget('add');
+    $add_nb  = $glade->get_widget('add_nb');
+    $add_contact_jid = $glade->get_widget('add_contact_jid');
+    $add_contact_name = $glade->get_widget('add_contact_name');
+    $add_contact_group = $glade->get_widget('add_contact_group');
     $state   = $glade->get_widget('state');
-    $username_widget = $glade->get_widget('username');
-    $username_widget->set_text("megavac");
-    $hostname_widget = $glade->get_widget('hostname');
-    $hostname_widget->set_text("megavac.ath.cx");
-    $port_widget = $glade->get_widget('port');
-    $port_widget->set_text("5222");
-    $resource_widget = $glade->get_widget('resource');
-    $resource_widget->set_text("Diskutilo");
-    $password_widget = $glade->get_widget('password');
-    $password_widget->set_text("huHuhu");
 
     my $widget = $glade->get_widget('contacts');
 #    my $contacts_model = Gtk2::TreeStore->new(qw/ Glib::String Glib::String /)
@@ -62,6 +68,7 @@ sub init_gui {
         $_->set_sizing('grow-only');
     }
     $state->set_active(0);
+#    $account->add_contact("fred\@megavac.ath.cx", "MOI");
 }
 
 sub diskutilo_connect {
@@ -104,13 +111,13 @@ sub on_state_changed {
 }
 
 sub on_main_config_button_clicked {
-    $confwin->show;
-#    $confwin->on_top;
+    $conf_win->show;
+#    $conf_win->on_top;
 }
 
 sub on_main_add_button_clicked {
-    $addwin->show;
-#    $confwin->on_top;
+    $add_win->show;
+#    $conf_win->on_top;
 }
 
 sub on_main_delete_event {
@@ -124,12 +131,25 @@ sub on_add_delete_event {
 }
 
 sub on_add_button_clicked {
-    if($add_type == "contact")
+    my $jid = $add_contact_jid->get_text();
+    my $name = $add_contact_name->get_text();
+
+    my $page = $add_nb->get_current_page;
+
+    if($page == 0)
     {
-	
+	print "add account\n";
+    }
+    elsif($page == 1)
+    {
+	print "add contact: jid: $jid, name: $name\n";
 	$account->add_contact($jid, $name);
     }
-    $addwin->hide;
+    if($page == 2)
+    {
+	print "add transport\n";
+    }
+    $add_win->hide;
 }
 
 sub on_config_delete_event {

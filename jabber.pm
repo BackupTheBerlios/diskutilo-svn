@@ -3,8 +3,8 @@ use strict;
 use warnings;
 use Net::Jabber qw (Client);
 #Imagine un lien vers une chatroom pour discuter de la page en cours
-#A cotÃ© du lien, il pourait etre affichÃ© le nombre de membres et les
-#derniere choses qui ont Ã©tÃ© dites, tout simple, non ?
+#A coté du lien, il pourait etre affiché le nombre de membres et les
+#derniere choses qui ont été dites, tout simple, non ?
 
 my %accounts = {};
 
@@ -59,12 +59,11 @@ sub Connect {
 	iq => \&jabber_callback_IQ);
 
     $this->{connection}->PresenceSend(type=>"available", show=>"available");
-    $this->{process_ID} = Glib::Timeout->add(200,
-	sub {$this->{connection}->Process(0);1;});
+    $this->{process_ID} = Glib::Timeout->add(200, sub {$this->{connection}->Process(0);1;});
 
-    my $jid = $this->{username}."@".$this->{hostname}."/".$this->{resource};
+    my $jid = $this->{username}."\@".$this->{hostname}."/".$this->{resource};
     $accounts{$jid} = $this;
-
+    $this->{connection}->Info(name=>"Diskutilo",version=>"v1", os=>"Biduxo");
     return 0;
 }
 
@@ -99,9 +98,11 @@ sub send_chat {
 }
 
 sub add_contact {
-    my ($this, $JID, $name) = @_;
-    $name = $JID if(!defined($name));
-    $this->{connection}->RosterAdd($JID, $name);
+    my ($this, $jid, $name) = @_;
+    $name = $jid;# if($name eq "");
+    print "JID: $jid\n";
+    $this->{connection}->RosterAdd($jid);
+    $this->{connection}->Subscription(to=>$jid, type=>"subscribe");
 }
 
 sub jabber_callback_message
@@ -111,7 +112,7 @@ sub jabber_callback_message
 
     my $type = $message->GetType();
     my $fromJID = $message->GetFrom("jid");
-    my $toJID = $message->GetTo("jid");
+#    my $toJID = $message->GetTo("jid");
     my $from = $message->GetFrom();
     my $to = $message->GetTo();
 
@@ -127,8 +128,8 @@ sub jabber_callback_message
 
     print "===\n";
     print "Message ($type)\n";
-    print "  From: $from/$fromJID ($resource)\n";
-    print "  To: $to/$toJID ($resource)\n";
+    print "  From: $from ($resource)\n";
+    print "  To: $to ($resource)\n";
     print "  Subject: $subject\n";
     print "  Body:\n$body\n";
 #    print "===\n";
@@ -144,13 +145,11 @@ sub jabber_callback_presence
     my $from = $presence->GetFrom();
     my $type = $presence->GetType();
     my $status = $presence->GetStatus();
-#    print "===\n";
-#    print "Presence\n";
-#    print "  From $from\n";
-#    print "  Type: $type\n";
-#    print "  Status: $status\n";
-#    print "===\n";
-#    print $presence->GetXML(),"\n";
+    print "===Presence\n";
+    print "  From $from\n";
+    print "  Type: $type\n";
+    print "  Status: $status\n";
+    print $presence->GetXML(),"\n";
 #    print "===\n";
 }
 
@@ -158,19 +157,39 @@ sub jabber_callback_IQ
 {
     my $sid = shift;
     my $iq = shift;
-    
+
+    my $to = $iq->GetTo();
     my $from = $iq->GetFrom();
     my $type = $iq->GetType();
-    my $query = $iq->GetQuery();
-    my $xmlns = $query->GetXMLNS();
-#    print "===\n";
-#    print "IQ\n";
-#    print "  From $from\n";
-#    print "  Type: $type\n";
-#    print "  XMLNS: $xmlns";
-#    print "===\n";
-#    print $iq->GetXML(),"\n";
-#    print "===\n";
-}
 
+    print "===IQ\n";
+    print "  From $from\n";
+    print "  Type: $type\n";
+
+    my $query = $iq->GetQuery();
+    if(defined $query)
+    {
+	my $xmlns = $query->GetXMLNS();
+	print "  XMLNS: \"$xmlns\"\n";
+
+	if($type eq "get")
+	{
+	    my $reply = $iq->Reply();
+	    my $reply_query = $reply->GetQuery();
+	    
+	    if($xmlns eq "jabber:iq:version")
+	    {
+		print "RQ: $reply_query\n";
+#		my $item = $reply_query->AddItem();
+#		$item->SetItem(os => "Bidux");
+#		$reply_query->SetOS(); #Net::jabber do not allow us to modify it...
+		$reply_query->SetName("Diskutilo");
+		$reply_query->SetVersion();
+	    }
+	    $accounts{$to}->{connection}->Send($reply);
+	}
+    }
+
+#    print "XML:" .  $iq->GetXML() . "\n";
+}
 1;
