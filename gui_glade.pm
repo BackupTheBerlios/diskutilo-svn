@@ -52,7 +52,6 @@ my @diskutilo_xpm = (
 '   ...    ...   ',
 '                ');
 
-
 sub ontop {
     my ($win) = @_;
     $win->show;
@@ -118,6 +117,7 @@ sub new {
     $this->{main}->{contacts}->{model} = Gtk2::TreeStore->new ('Glib::String', 'Glib::String', 'Glib::String', 'Glib::String');
     $this->{main}->{contacts}->{treeview} = $this->{glade}->get_widget ('main_contacts');
     $this->{main}->{contacts}->{treeview}->signal_connect (row_activated => sub{$this->on_contact_row_activated(@_);1});
+    $this->{main}->{contacts}->{treeview}->signal_connect_after (button_release_event => sub{$this->on_contact_menu(@_);1});
 
     $this->{window_group} = Gtk2::WindowGroup->new;
     $this->{window_group}->add_window ($this->{add}->{win});
@@ -126,31 +126,25 @@ sub new {
 
     #Roster
     $this->{main}->{contacts}->{treeview}->set_model ($this->{main}->{contacts}->{model});
-    #ROSTER:COLUMN STATE
+    #ROSTER:COLUMN STATE_ICON
     my $renderer = Gtk2::CellRendererPixbuf->new;
-    my $column = Gtk2::TreeViewColumn->new_with_attributes ("State", $renderer); 
-    
+    my $column = Gtk2::TreeViewColumn->new_with_attributes ("State Icon", $renderer);#,$renderer, 'stock_id'=>0, 'pixbuf'=>ROSTER_COL_STATE 
     $this->{main}->{contacts}->{treeview}->append_column ($column);
+    $column->set_cell_data_func ($renderer, sub{$this->macro_set_func_pixbuf(@_);1});
     #ROSTER:COLUMN NAME/ID
     $renderer = Gtk2::CellRendererText->new;
     $column = Gtk2::TreeViewColumn->new_with_attributes ("Name", $renderer, 'text' => ROSTER_COL_NAME);
     $this->{main}->{contacts}->{treeview}->append_column ($column);
     #
-    $this->{main}->{contacts}->{treeview}->signal_connect_after (button_release_event => sub{$this->on_contact_menu(@_);1});
     $this->{main}->{contacts}->{treeview}->show_all;
 
-    # create tray icon
-    my $icon = Gtk2::TrayIcon->new('Diskutilo');
-    my $iconEB = Gtk2::EventBox->new;
-    # attach event to tray icon to show menu
-    $iconEB->signal_connect("button-release-event", sub{$this->on_icon_menu(@_);1});
-    # adding tray icon image
+    $this->{icon} = Gtk2::TrayIcon->new("test");
     my $pixbuf = Gtk2::Gdk::Pixbuf->new_from_xpm_data (@diskutilo_xpm);
     my $image = Gtk2::Image->new_from_pixbuf ($pixbuf);
-    $iconEB->add($image);
-    $icon->add($iconEB);
-    $icon->show_all;
-
+    $this->{icon}->add($image);
+    $this->{icon}->show_all;
+    $this->{icon}->signal_connect(event => sub{$this->on_icon_menu(@_);1});
+    $image->signal_connect(event => sub{$this->on_icon_menu(@_);1});
     $this->{chat_wins} = ();
 
     $this->{diskutilo} = $diskutilo;
@@ -159,23 +153,29 @@ sub new {
     return $this;
 }
 
-#piano russe orovitz
+sub macro_set_func_pixbuf {
+    my ($this, $tree_column, $cell, $model, $iter) = @_;
+    my ($state) = $model->get ($iter, ROSTER_COL_STATE);
+    if(defined($this->{state_icon}->{$state})) {
+	$cell->set (pixbuf => $this->{state_icon}->{$state});
+    } else {
+	print "State: $state\n";
+    }
+}
 
 sub load_icons {
     my ($this, $dir_name) = @_;
-    my $file_name = $dir_name . "/icondef.xml";
 
+#    my $file_name = $dir_name . "/icondef.xml";
 #    my $iconset = XMLin($file_name, ForceArray => 1, KeyAttr => "x") if (-e $file_name);
-#    print Dumper($iconset);
-
 #    foreach (@{$iconset->{icon}}) {
 #	print "object: $_->{content}: " foreach (@{$_->{object}});
 #	print "x: $_->{xmlns}: $_->{content}\n" foreach (@{$_->{x}});
 #    }
 
-    foreach (qw/offline xa dnd away chat online/) {
+    foreach (qw/offline xa dnd away chat online message headline/) {
 	my $pixbuf = Gtk2::Gdk::Pixbuf->new_from_file ($_.".png");
-	$this->{state_icon}->{$_} = \$pixbuf;
+	$this->{state_icon}->{$_} = $pixbuf;
     }
 }
 
@@ -187,19 +187,20 @@ sub main {
 sub on_icon_menu {
     my ($this, $widget, $event) = @_;
 
-    print "on_icon_menu: " . $event->type . "\n";
+#print "on_icon_menu: " . $event->type . "\n";
     #afficher les properties.
+    return undef;
 
     if($event->button() == 3) {
 	my $menu = Gtk2::Menu->new();
-	menu_append($menu, "Quit", sub{1});
+	menu_append($menu, "Delete", sub{1});
 	my $submenu = Gtk2::Menu->new();
 	menu_append($submenu, "OffLine", sub{$this->{diskutilo}->set_state("offline");1});
 	menu_append($submenu, "xa", sub{$this->{diskutilo}->set_state("xa");1});
 	menu_append($submenu, "dnd", sub{$this->{diskutilo}->set_state("dnd");1});
 	menu_append($submenu, "away", sub{$this->{diskutilo}->set_state("away");1});
 	menu_append($submenu, "Chat", sub{$this->{diskutilo}->set_state("chat");1});
-	menu_append($submenu, "Online"=>sub{$this->{diskutilo}->set_state("online");1});
+	menu_append($submenu, "Online", sub{$this->{diskutilo}->set_state("online");1});
 	menu_append($menu, "State", $submenu);
 	$menu->popup(undef, undef, undef, undef, $event->button,$event->time);
 	return 1;
@@ -208,13 +209,14 @@ sub on_icon_menu {
 }
 
 sub add_account {
-    my ($this, $ajid, $name) = @_;
+    my ($this, $ajid, $name, $process) = @_;
     $name = $ajid if(!defined($name) or $name eq "");
     my $iter = $this->{main}->{contacts}->{model}->append(undef);
-    $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_ID, $ajid, ROSTER_COL_NAME, $name);
+    $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_ID, $ajid, ROSTER_COL_NAME, $name, ROSTER_COL_STATE, "offline");
+    $this->{$ajid}->{process} = $process;
 }
 
-sub del_account {
+sub remove_account {
     my ($this, $ajid) = @_;
     my $iter = $this->account_iter($ajid);
     $this->{main}->{contacts}->{model}->remove ($iter);    
@@ -227,12 +229,12 @@ sub on_main_state_changed {
 }
 
 sub set_account_state {
-    my ($this, $ajid, $state, $process) = @_;
+    my ($this, $ajid, $state) = @_;
     my $iter = $this->account_iter($ajid);
 
-#    $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_STATE, $this->{state_icon}->{$state});
+    $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_STATE, $state);
 
-    if($state eq "unavailable") {
+    if($state eq "offline") {
 	#FIXME: update chat wins
 	my $iter = $this->{main}->{contacts}->{model}->iter_children($this->account_iter($ajid));
 	while(defined($iter)) {
@@ -244,7 +246,7 @@ sub set_account_state {
 	    Glib::Source->remove($this->{$ajid}->{process_ID});
 	}
     } else {
-	$this->{$ajid}->{process_ID} = Glib::Timeout->add(200, $process);
+	$this->{$ajid}->{process_ID} = Glib::Timeout->add(200, $this->{$ajid}->{process});
     }
 }
 
@@ -255,14 +257,14 @@ sub on_contact_presence {
     $jid =~ s!\/.*$!!;
     my $iter = $this->contact_iter($ajid, $jid);
     $iter = $this->add_contact($ajid, $jid) unless(defined($iter));
-    if($state eq "unavailable") {
+    if($state eq "offline") {
 	$this->{main}->{contacts}->{model}->remove ($iter);
 	if(defined($this->{chat_wins}->{$ajid}->{$jid})) {
 	    $this->{chat_wins}->{$ajid}->{$jid}->{win}->destroy;
 	    delete $this->{chat_wins}->{$ajid}->{$jid};
 	}
     } else {
-#	$this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_STATE, $this->{state_icon}->{$state});
+	$this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_STATE, $state);
     }
 }
 
@@ -270,13 +272,15 @@ sub on_contact_row_activated {
     my ($this, $widget) = @_;
     my ($path) = $widget->get_cursor;    
     my ($ajid, $jid) = $this->get_account_contact($path);
-    print "ajid: $ajid, jid: $jid\n";
-    $this->open_chat($ajid, $jid) if(defined($jid));
+    if(defined($ajid) and defined($jid)) {
+	$this->open_chat($ajid, $jid) if(defined($jid));
+    }
 }
 
 sub on_contact_menu {
     my ($this, $widget, $event) = @_;
-
+#    print $event->type . "\n";
+#    if($event->type eq "button-release")
     if($event->button() == 3) {
 	my ($x,$y) = $event->get_coords;
 	my ($path, $column, $px, $py) = $widget->get_path_at_pos($x,$y);
@@ -284,24 +288,23 @@ sub on_contact_menu {
 	if(defined($ajid)) {
 	    my $menu = Gtk2::Menu->new();
 	    if(defined($jid)) {
-		menu_append($menu, "Delete", sub{1});
+		menu_append($menu, "Delete", sub{$this->{diskutilo}->remove_contact($ajid, $jid)});
 		menu_append($menu, "Chat", sub{$this->open_chat($ajid, $jid)});
 	    } else {
-		menu_append($menu, "Delete", sub{$this->{diskutilo}->del_account($ajid)});
+		menu_append($menu, "Delete", sub{$this->{diskutilo}->remove_account($ajid)});
 		my $submenu = Gtk2::Menu->new();
 		menu_append($submenu, "OffLine", sub{$this->{diskutilo}->set_account_state($ajid, "offline");1});
 		menu_append($submenu, "xa", sub{$this->{diskutilo}->set_account_state($ajid, "xa");1});
 		menu_append($submenu, "dnd", sub{$this->{diskutilo}->set_account_state($ajid, "dnd");1});
 		menu_append($submenu, "away", sub{$this->{diskutilo}->set_account_state($ajid, "away");1});
 		menu_append($submenu, "Chat", sub{$this->{diskutilo}->set_account_state($ajid, "chat");1});
-		menu_append($submenu, "Online"=>sub{$this->{diskutilo}->set_account_state($ajid, "online");1});
+		menu_append($submenu, "Online", sub{$this->{diskutilo}->set_account_state($ajid, "online");1});
 		menu_append($menu, "State", $submenu);
 	    }
 	    $menu->popup(undef, undef, undef, undef, $event->button,$event->time);
-	    return 1;
 	}
     }
-    return undef;
+    return 0;
 }
 
 #COMMIT
@@ -311,7 +314,6 @@ sub config_commit {
 #ADD
 sub on_add_show {
     my ($this) = @_;
-
     $this->{add}->{account}->{port}->set_text("5222");
     $this->{add}->{account}->{resource}->set_text("diskutilo");    
     ontop($this->{add}->{win});
@@ -387,7 +389,7 @@ sub on_add_account {
 
 sub add_contact {
     my ($this, $ajid, $jid) = @_;
-    my ($name) = $this->{diskutilo}->get_contact_roster_info($ajid, $jid);
+    my ($name) = $this->{diskutilo}->get_contact_name($ajid, $jid);
     my $iter = $this->{main}->{contacts}->{model}->append($this->account_iter($ajid));
     $name = $jid if(not defined($name) or $name eq "");
     $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_ID, $jid, ROSTER_COL_NAME, $name);
@@ -408,6 +410,10 @@ sub open_chat {
 	$this->{chat_wins}->{$ajid}->{$jid}->{win}->set_title($jid);
 	$this->{chat_wins}->{$ajid}->{$jid}->{conv} = $glade->get_widget("conv");
 	$this->{chat_wins}->{$ajid}->{$jid}->{conv}->set (wrap_mode => "word");	
+	my $buffer = $this->{chat_wins}->{$ajid}->{$jid}->{conv}->get_buffer;
+	$buffer->create_tag("me", style => 'italic', );
+	$buffer->create_tag("him", style => 'italic');
+	$buffer->create_tag("tome", style => 'italic');
 
 	my $pad = $glade->get_widget("pad"); #isn't "pad" a good name ?
 	$pad->signal_connect(key_release_event => sub{return $this->on_pad_key_release($ajid, $jid, @_)});
@@ -422,7 +428,7 @@ sub on_chat_delete {
 }
 
 sub on_chat {
-    my ($this, $ajid, $fjid, $body) = @_;
+    my ($this, $ajid, $fjid, $from, $body) = @_;
     my $jid = $fjid;
     $jid =~ s!\/.*$!!;
     # my ($jid) = ($fjid =~ m!^(.*)\/?.*$!);HTF I can do it ?!!
@@ -430,22 +436,26 @@ sub on_chat {
     $this->open_chat($ajid, $jid);
     my $buffer = $this->{chat_wins}->{$ajid}->{$jid}->{conv}->get_buffer;
     my $iter = $buffer->get_end_iter;
-    if($jid eq $ajid) {
-	$buffer->insert($iter, "me: " . $body);
+    if($from eq $ajid) {
+	$buffer->insert_with_tags_by_name ($iter, "me: ", "me");
     } else {
-	$buffer->insert($iter, "$ajid: " . $body);
+	my ($name) = $this->{diskutilo}->get_contact_name($ajid, $jid);
+	$buffer->insert_with_tags_by_name ($iter, $name . ": ", "him");
     }
+    $buffer->insert($iter, $body);
+
     $iter = $buffer->get_end_iter;
     $buffer->insert($iter, "\n");
     $this->{chat_wins}->{$ajid}->{$jid}->{conv}->scroll_to_iter ($iter, 0, 0, 0, 0)
 }
 
 sub on_message {
-    my ($this, $ajid, $fjid, $subject, $body) = @_;
+    my ($this, $ajid, $fjid, $from, $subject, $body) = @_;
     my $jid = $fjid;
     $jid =~ s!\/.*$!!;
     print "MESSAGE !";
-    $this->on_chat($ajid, $fjid, $body);
+    $this->on_chat($ajid, $fjid, $from, "Subject:" . $subject);
+    $this->on_chat($ajid, $fjid, $from, $body);
 }
 
 sub on_headline {
@@ -463,7 +473,7 @@ sub on_pad_key_release {
 	if($body ne "") {
 	    $pad->set_text("");
 	    $this->{diskutilo}->send_chat($ajid, $jid, $body);
-	    $this->on_chat($ajid, $jid, $body);
+	    $this->on_chat($ajid, $jid, $ajid, $body);
 	}
 	return 1; # consume keyrelease
     }
@@ -552,7 +562,6 @@ sub menu_append {
 
 sub JID2UHPR {
     my ($jid) = @_;
-
     return ($jid =~ m/^([\w.]+)\@([\w.]+)\:?(\d+)?\/?(\w+)?$/);
 }
 
