@@ -13,9 +13,8 @@ use Data::Dumper;
 
 my %accounts = ();
 
-sub new
-{
-    my ($class, $config, $on_chat, $on_presence) = @_;
+sub new {
+    my ($class, $config, $diskutilo) = @_;
     my $this = {};
     bless($this, $class);
     $this->{connection} = undef;
@@ -24,77 +23,71 @@ sub new
     $this->{port} = $config->{port};
     $this->{password} = $config->{password};
     $this->{resource} = $config->{resource};
-    $this->{on_chat} = $on_chat;
-    $this->{on_presence} = $on_presence;
-
+    $this->{diskutilo} = $diskutilo;
+    $accounts{$this->{username}."\@".$this->{hostname}} = $this;
     return $this;
 }
 
 sub Connect {
     my ($this) = @_;
 
-    if(defined $this->{connection})
-    {
+    if(defined $this->{connection}) {
 	print "Already connected Coco ! ($!)\n";
 	return -1;
     }
-
-    $this->{connection} = Net::Jabber::Client->new();
-    $this->{connection}->Connect( "hostname" => $this->{hostname},
+    my $connection = Net::Jabber::Client->new();
+    $connection->Connect( "hostname" => $this->{hostname},
 	"port" => $this->{port} );
-
-    if(!$this->{connection}->Connected())
-    {
+    unless($connection->Connected()) {
 	print "Cannot connect gal ! ($!)\n";
 	return -1;
     }
-
-    my @result = $this->{connection}->AuthSend( "username" => $this->{username},
+    my @result = $connection->AuthSend( "username" => $this->{username},
 	"password" => $this->{password},
 	"resource" => $this->{resource});
-    if($result[0] ne "ok")
-    {
+    if($result[0] ne "ok") {
 	print "Cannot authenticate dude ! ($!)\n";
 	return -1;
     }
-
-    my %roster = $this->{connection}->RosterGet();
+    my %roster = $connection->RosterGet();
     $this->{roster} = \%roster;
-
-    $this->{connection}->SetCallBacks(message => \&jabber_callback_message,
-	presence => \&jabber_callback_presence,
-	iq => \&jabber_callback_IQ);
-
-    $this->{connection}->PresenceSend(show=>"away");
-#FIXME: move it out of here !
-    $this->{process_ID} = Glib::Timeout->add(200, sub {$this->{connection}->Process(0);1;});
-
-    my $jid = $this->{username}."\@".$this->{hostname};#."/".$this->{resource};
-    $accounts{$jid} = $this;
-    $this->{connection}->Info(name=>"Diskutilo",version=>"v1", os=>"Biduxo");
+    $this->{connection} = $connection;
+    $connection->SetCallBacks(presence => \&jabber_callback_presence,
+			      message => \&jabber_callback_message,
+			      iq => \&jabber_callback_IQ);
     return 0;
 }
 
 sub Disconnect {
     my ($this) = @_;
 
-    return -1 if(!defined $this->{connection});
+    return -1 unless(defined $this->{connection});
     $this->{connection}->Disconnect();
     $this->{connection} = undef;
-
     my $jid = $this->{username}."@".$this->{hostname};#."/".$this->{resource};
-    delete $accounts{$jid};
-
     return 0;
 }
 
+sub set_state {
+    my ($this, $show, $status) = @_;
+
+    if($show eq "unavailable") {
+	$this->Disconnect();
+    } else {
+	return -1 if($this->Connect() == -1);
+	if(grep {$_ eq $show} (qw(available chat dnd xa away), "")){
+	    $this->{connection}->PresenceSend(show=>$show, status=>$status);
+	}
+    }
+    return 0;
+}
+
+#CONTACT
 sub send_chat {
     my ($this, $JID, $body) = @_;
 
     my $msg = Net::Jabber::Message->new();
-    $msg->SetMessage( "to" => $JID,
-		      "type" => "chat",
-		      "body" => $body);
+    $msg->SetMessage( "to" => $JID, "type" => "chat", "body" => $body);
     $this->{connection}->Send($msg);
 }
 
@@ -106,8 +99,15 @@ sub add_contact {
     $this->{connection}->Subscription(to=>$jid, type=>"subscribe");
 }
 
-sub jabber_callback_message
-{
+sub contact_set_name {
+    my ($this, $name) = @_;
+
+    my $iq = new Net::Jabber::IQ();
+    my $query = $iq->NewQuery("jabber:iq:roster");
+    $query->SetName($name);
+}
+
+sub jabber_callback_message {
     my $sid = shift;
     my $message = shift;
 
@@ -117,29 +117,14 @@ sub jabber_callback_message
     my $from = $message->GetFrom();
     my $to = $message->GetTo();
     $to =~ s!\/.*$!!; # remove any resource suffix from JID
-#    my $from = $fromJID->GetUserID();
-#    my $to = $toJID->GetUserID();
     my $resource = $fromJID->GetResource();
     my $subject = $message->GetSubject();
     my $body = $message->GetBody();
 
-    $accounts{$to}->{on_chat}($accounts{$to}, $from, $body);
-
-#    $this->{on_chat}($this, $from, $body);
-
-#    print "===\n";
-#    print "Message ($type)\n";
-#    print "  From: $from ($resource)\n";
-#    print "  To: $to ($resource)\n";
-#    print "  Subject: $subject\n";
-#    print "  Body:\n$body\n";
-#    print "===\n";
-#    print $message->GetXML(),"\n";
-#    print "===\n";
+    $accounts{$to}->{diskutilo}->on_contact_message($to, $from, $type, $body, $subject);
 }
 
-sub jabber_callback_presence
-{
+sub jabber_callback_presence {
     my $sid = shift;
     my $presence = shift;
 
@@ -147,21 +132,30 @@ sub jabber_callback_presence
     $to =~ s!\/.*$!!; # remove any resource suffix from JID
 
     my $from = $presence->GetFrom();
-    my $type = $presence->GetType();
+    my $type = $presence->GetType();# availa
     my $status = $presence->GetStatus();
     my $show = $presence->GetShow();
 
 #    print Dumper($presence) if($to eq "error");
-#    print "===Presence: $from: $to: $type: $status: $show\n";
 #    print Dumper($presence) if($status eq "Online");
 #    print $presence->GetXML(),"\n";
 #    print "===\n";
 
-    $accounts{$to}->{on_presence}($accounts{$to}, $from, $type, $status, $show);
+    my $state = "unknown";
+    #print "===Presence: $from: $to: [$type-$status-$show]\n";
+    if($type eq "unavailable") {
+	$state = "unavailable";
+    } elsif($type eq "") {
+	$state = $show;
+    } elsif($type eq "error") {
+	return;
+    } else {
+	print "===Presence: $from: $to: [$type-$status-$show]\n";
+    }
+    $accounts{$to}->{diskutilo}->on_contact_presence($to, $from, $state);
 }
 
-sub jabber_callback_IQ
-{
+sub jabber_callback_IQ {
     my $sid = shift;
     my $iq = shift;
 
@@ -170,22 +164,18 @@ sub jabber_callback_IQ
 
     my $from = $iq->GetFrom();
     my $type = $iq->GetType();
-    
+
     print "===IQ: $from: $type\n";
 
     my $query = $iq->GetQuery();
-    if(defined $query)
-    {
+    if(defined $query) {
 	my $xmlns = $query->GetXMLNS();
 #	print "  XMLNS: \"$xmlns\"\n";
 
-	if($type eq "get")
-	{
+	if($type eq "get") {
 	    my $reply = $iq->Reply();
 	    my $reply_query = $reply->GetQuery();
-	    
-	    if($xmlns eq "jabber:iq:version")
-	    {
+	    if($xmlns eq "jabber:iq:version") {
 #		print "RQ: $reply_query\n";
 #		my $item = $reply_query->AddItem();
 #		$item->SetItem(os => "Bidux");
@@ -198,4 +188,5 @@ sub jabber_callback_IQ
     }
 #    print "XML:" .  $iq->GetXML() . "\n";
 }
+
 1;
