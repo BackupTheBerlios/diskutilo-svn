@@ -15,7 +15,6 @@ use constant ROSTER_COL_TYPE => 1;
 use constant ROSTER_COL_NAME => 2;
 use constant ROSTER_COL_STATE => 3;
 
-#Hide des fenetres de chats
 #Images pour les status
 #Fenetre de Messages
 #Roster editable
@@ -25,7 +24,9 @@ use constant ROSTER_COL_STATE => 3;
 #SSL
 #GPG
 #PROXY
-#
+
+#White board
+#ChatWorld
 
 my @diskutilo_xpm = (
 '16 16 5 1',
@@ -54,6 +55,7 @@ my @diskutilo_xpm = (
 
 sub ontop {
     my ($win) = @_;
+    $win->show;
     my $gdkwin = $win->window;
     $gdkwin->focus(1);
 }
@@ -68,6 +70,8 @@ sub new {
     $this->{add}->{win}      = $this->{glade}->get_widget('add');
     $this->{add}->{win}->signal_connect (delete_event => sub{on_delete_hide(@_);1});
     $this->{add}->{notebook} = $this->{glade}->get_widget('add_nb');
+    $this->{add}->{cancel} = $this->{glade}->get_widget('add_cancel');
+    $this->{add}->{cancel}->signal_connect (clicked => sub{$this->on_add_cancel;1});
     $this->{add}->{ok} = $this->{glade}->get_widget('add_ok');
     $this->{add}->{ok}->signal_connect (clicked => sub{$this->on_add_ok;1});
 
@@ -170,7 +174,7 @@ sub on_icon_menu {
     my ($this, $widget, $event) = @_;
 
     print "on_icon_menu: " . $event->type . "\n";
-
+    #afficher les properties.
     return undef;
 
     if($event->button() == 3) {
@@ -296,6 +300,13 @@ sub on_add_show {
     $this->{add}->{account}->{port}->set_text("5222");
     $this->{add}->{account}->{resource}->set_text("diskutilo");    
     ontop($this->{add}->{win});
+}
+
+sub on_add_cancel {
+    my ($this) = @_;
+    #clean add fields
+    $this->{add}->{win}->hide;
+    return 1;
 }
 
 sub on_add_ok {
