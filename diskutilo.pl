@@ -15,6 +15,7 @@ use open ":utf8";
 my $glade;
 my $mainwin;
 my $confwin;
+my $addwin;
 my $state;
 my $contacts;
 
@@ -37,6 +38,7 @@ exit 0;
 sub init_gui {
     $mainwin = $glade->get_widget('main');
     $confwin = $glade->get_widget('config');
+    $addwin  = $glade->get_widget('add');
     $state   = $glade->get_widget('state');
     $username_widget = $glade->get_widget('username');
     $username_widget->set_text("megavac");
@@ -101,24 +103,43 @@ sub on_state_changed {
     }
 }
 
-sub on_main_delete_event {
-    Gtk2->main_quit;
-}
-
-sub on_config_button_clicked {
+sub on_main_config_button_clicked {
     $confwin->show;
 #    $confwin->on_top;
 }
 
-sub on_config_destroy_event {
+sub on_main_add_button_clicked {
+    $addwin->show;
+#    $confwin->on_top;
+}
+
+sub on_main_delete_event {
+    Gtk2->main_quit;
+}
+
+sub on_add_delete_event {
     my $w = shift;
     $w->hide;
-    $account->{username} = $username_widget->get_text();
-    $account->{hostname} = $hostname_widget->get_text();
-    $account->{port} = $port_widget->get_text();
-    $account->{resource} = $resource_widget->get_text();
-    $account->{password} = $password_widget->get_text();
+    1;#consume this event!
+}
 
+sub on_add_button_clicked {
+    if($add_type == "contact")
+    {
+	
+	$account->add_contact($jid, $name);
+    }
+    $addwin->hide;
+}
+
+sub on_config_delete_event {
+    my $w = shift;
+    $w->hide;
+#    $account->{username} = $username_widget->get_text();
+#    $account->{hostname} = $hostname_widget->get_text();
+#    $account->{port} = $port_widget->get_text();
+#    $account->{resource} = $resource_widget->get_text();
+#    $account->{password} = $password_widget->get_text();
     1;#consume this event!
 }
 

@@ -98,6 +98,12 @@ sub send_chat {
     $this->{connection}->Send($msg);
 }
 
+sub add_contact {
+    my ($this, $JID, $name) = @_;
+    $name = $JID if(!defined($name));
+    $this->{connection}->RosterAdd($JID, $name);
+}
+
 sub jabber_callback_message
 {
     my $sid = shift;
@@ -167,6 +173,4 @@ sub jabber_callback_IQ
 #    print "===\n";
 }
 
-
 1;
-
