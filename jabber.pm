@@ -4,7 +4,7 @@ use warnings;
 use Net::Jabber qw (Client);
 #Imagine un lien vers une chatroom pour discuter de la page en cours
 #A coté du lien, il pourait etre affiché le nombre de membres et les
-#derniere choses qui ont été dites, tout simple, non ?
+#dernière choses qui ont été dites, tout simple, non ?
 
 my %accounts = {};
 
@@ -126,12 +126,12 @@ sub jabber_callback_message
 
 #    $this->{on_chat}($this, $from, $body);
 
-    print "===\n";
-    print "Message ($type)\n";
-    print "  From: $from ($resource)\n";
-    print "  To: $to ($resource)\n";
-    print "  Subject: $subject\n";
-    print "  Body:\n$body\n";
+#    print "===\n";
+#    print "Message ($type)\n";
+#    print "  From: $from ($resource)\n";
+#    print "  To: $to ($resource)\n";
+#    print "  Subject: $subject\n";
+#    print "  Body:\n$body\n";
 #    print "===\n";
 #    print $message->GetXML(),"\n";
 #    print "===\n";

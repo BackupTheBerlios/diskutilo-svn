@@ -41,7 +41,7 @@
 	      <property name="rules_hint">False</property>
 	      <property name="reorderable">False</property>
 	      <property name="enable_search">True</property>
-	      <signal name="row_activated" handler="on_contacts_row_activated" last_modification_time="Fri, 13 Aug 2004 16:26:20 GMT"/>
+	      <signal name="row_activated" handler="on_contacts_row_activated" after="yes" last_modification_time="Fri, 13 Aug 2004 16:26:20 GMT"/>
 	    </widget>
 	  </child>
 	</widget>

@@ -35,12 +35,13 @@ my %chatwin = ();
 # Roster:
 #jabber: jid, name, subs, groups
 #gtk: group- name, presence.
-#diskutilo: $jid, $name, @groups, [$presence, $resources, $prio, $info], vcard.
+#diskutilo: $jid, $name, @groups, [$presence, $resources, $prio, $info, @history], %vcard.
 
-#@account
+#Je doit pouvoir retrouver un contact dans ma liste 
 
-my $account = jabber->new("megavac", "megavac.ath.cx", "5222", "huHuhu", "diskutilo", \&on_chat);
-#my $account = jabber->new("fremo", "jabber.org", "5222", "", "diskutilo");
+#my $jabber = jabber->new("fred", "megavac.ath.cx", "5222", "rigili", "diskutilo", \&on_chat);
+my $jabber = jabber->new("megavac", "megavac.ath.cx", "5222", "huHuhu", "diskutilo", \&on_chat);
+#my $jabber = jabber->new("fremo", "jabber.org", "5222", "", "diskutilo");
 $glade = Gtk2::GladeXML->new("diskutilo.glade");
 $glade->signal_autoconnect_from_package('main');
 init_gui();
@@ -57,44 +58,48 @@ sub init_gui {
     $add_contact_group = $glade->get_widget('add_contact_group');
     $state   = $glade->get_widget('state');
 
-    my $widget = $glade->get_widget('contacts');
-#    my $contacts_model = Gtk2::TreeStore->new(qw/ Glib::String Glib::String /)
-#    $contacts = Gtk2::SimpleList->new_with_model( )
-    $contacts = Gtk2::SimpleList->new_from_treeview(
-        $widget, 'jid' => 'text');
-    $contacts->set_headers_clickable(1);
-    foreach ($contacts->get_columns()) {
-        $_->set_resizable(1);
-        $_->set_sizing('grow-only');
-    }
+    my $TV = $glade->get_widget('contacts');
+    $contacts = Gtk2::ListStore->new ('Glib::String', 'Glib::String');
+    $TV->set_model ($contacts);
+    $TV->set_rules_hint (0);
+    $TV->set_search_column (0);
+    my $renderer = Gtk2::CellRendererText->new;
+    my $column = Gtk2::TreeViewColumn->new_with_attributes ("JID",
+							    $renderer,
+							    text => 1);
+    $column->set_sort_column_id (0);
+    $TV->append_column ($column);
+
+    $TV->show_all;
+
+#    $contacts->set_headers_clickable(1);
+#    foreach ($contacts->get_columns()) {
+#        $_->set_resizable(1);
+#        $_->set_sizing('grow-only');
+#    }
     $state->set_active(0);
-#    $account->add_contact("fred\@megavac.ath.cx", "MOI");
 }
 
 sub diskutilo_connect {
-    $account->Connect() ne -1 or return -1;
-    
-    if($account->Get_roster() == -1)
+    $jabber->Connect() ne -1 or return -1;
+
+    if($jabber->Get_roster() == -1)
     {
 	print "HEEEUUUERRR ! no roster !\n";
     }
 
-    if(defined($contacts))
+    foreach (keys %{$jabber->{roster}})
     {
-	@{$contacts->{data}} = ();
-	foreach my $contact (keys %{$account->{roster}})
-	    {
-		print "contact: $contact, $account->{roster}->{$contact}->{name}\n";
-		push @{$contacts->{data}}, [$contact];
-	    }
+	my $iter = $contacts->append;
+	$contacts->set ($iter, 0, $_, 1, $jabber->{roster}->{$_}->{name});
     }
     return 0;
 }
 
 sub diskutilo_disconnect {
-    Glib::Source->remove($account->{process_ID}) if(defined($account->{process_ID}));
-      @{$contacts->{data}} = ();
-      $account->Disconnect();
+    Glib::Source->remove($jabber->{process_ID}) if(defined($jabber->{process_ID}));
+      $contacts->clear;
+      $jabber->Disconnect();
       return 0;
 }
 
@@ -143,7 +148,7 @@ sub on_add_button_clicked {
     elsif($page == 1)
     {
 	print "add contact: jid: $jid, name: $name\n";
-	$account->add_contact($jid, $name);
+	$jabber->add_contact($jid, $name);
     }
     if($page == 2)
     {
@@ -155,44 +160,46 @@ sub on_add_button_clicked {
 sub on_config_delete_event {
     my $w = shift;
     $w->hide;
-#    $account->{username} = $username_widget->get_text();
-#    $account->{hostname} = $hostname_widget->get_text();
-#    $account->{port} = $port_widget->get_text();
-#    $account->{resource} = $resource_widget->get_text();
-#    $account->{password} = $password_widget->get_text();
+#    $jabber->{username} = $username_widget->get_text();
+#    $jabber->{hostname} = $hostname_widget->get_text();
+#    $jabber->{port} = $port_widget->get_text();
+#    $jabber->{resource} = $resource_widget->get_text();
+#    $jabber->{password} = $password_widget->get_text();
     1;#consume this event!
 }
 
 sub on_chat_delete {
     my ($widget, $event, $data) = @_;
-    my ($account, $jid) = @{$data};
+    my ($jabber, $jid) = @{$data};
     delete $chatwin{$jid};
     0;
 }
 
 sub open_chat {
-    my ($account, $jid) = @_;
+    my ($jabber, $jid) = @_;
 
     my $chat = Gtk2::Window->new;
-    $chat->signal_connect (delete_event => \&on_chat_delete, [$account, $jid]);
-#$chat->signal_connect (destroy_event => \&on_chat_delete, [$account, $jid]);
+    $chat->signal_connect (delete_event => \&on_chat_delete, [$jabber, $jid]);
+#$chat->signal_connect (destroy_event => \&on_chat_delete, [$jabber, $jid]);
     $chat->set_title ("Chat with $jid");
+    $chat->set_size_request(200, 200);
     my $vbox = Gtk2::VBox->new;
     $chat->add($vbox);
     my $scroller = Gtk2::ScrolledWindow->new;
     $scroller->set_policy (qw(never automatic));
 
-    $vbox->add ($scroller);
+    $vbox->pack_start ($scroller, 1, 1, 0);
     my $recv = Gtk2::TextView->new;
+    $recv->can_focus(0);
     $recv->set (editable => 0);
     $recv->set_cursor_visible (0);
     $recv->set (wrap_mode => "word");	
     $scroller->add ($recv);
     my $send = Gtk2::Entry->new;
     $send->set_activates_default(1);
-    $send->grab_focus;
-    $send->signal_connect (key_release_event => \&on_chat_key, [$account, $jid]);
-    $vbox->add ($send);
+    $send->signal_connect (key_release_event => \&on_chat_key, [$jabber, $jid]);
+    $vbox->pack_start ($send, 0, 0, 0);
+    $send->grab_focus();
     $chat->show_all;
     $chatwin{$jid} = [$chat, $recv];
 }
@@ -200,31 +207,37 @@ sub open_chat {
 sub on_contacts_row_activated {
     my $widget = shift;
 
-    my $index = ($widget->get_selected_indices())[0];
-    my $jid = $widget->{data}[$index][0];
+    my ($path) = $widget->get_cursor;
 
-    return 1 if(exists ($chatwin{$jid}));
+    my $iter = $contacts->get_iter ($path);
+    my ($jid) = $contacts->get ($iter, 0);
 
-    open_chat($account, $jid);
-
+    if(exists ($chatwin{$jid}))
+    {
+	#put chatwin on top;
+    }
+    else
+    {
+	open_chat($jabber, $jid);
+    }
     return 1; # consume event
 }
 
 sub chat_add_text {
-    my ($account, $jid, $text) = @_;
+    my ($jabber, $jid, $text) = @_;
 
-    open_chat($account, $jid) if(!exists $chatwin{$jid});
-
-    my $buffer = $chatwin{$jid}[1]->get_buffer;
+    open_chat($jabber, $jid) if(!exists $chatwin{$jid});
+    my $TV = $chatwin{$jid}[1];
+    my $buffer = $TV->get_buffer;
     my $iter = $buffer->get_end_iter;
     $buffer->insert($iter, $text . "\n");
-    $chatwin{$jid}[1]->forward_display_line_end ($iter);
+    $iter = $buffer->get_end_iter;
+    $TV->scroll_to_iter ($iter, 0, 0, 0, 0)
 }
-
 
 sub on_chat_key {
     my ($widget, $event, $data) = @_;
-    my ($account, $jid) = @{$data};
+    my ($jabber, $jid) = @{$data};
 
     my $keypress = $event->keyval;    
     if ($keypress == $Gtk2::Gdk::Keysyms{KP_Enter} ||
@@ -233,8 +246,8 @@ sub on_chat_key {
 	if($body ne "")
 	{
 	    $widget->set_text("");
-	    $account->send_chat($jid, $body);
-	    chat_add_text($account, $jid, "mi : " . $body);
+	    $jabber->send_chat($jid, $body);
+	    chat_add_text($jabber, $jid, "mi : " . $body);
 	}
 	return 1; # consume keypress
     }
@@ -248,7 +261,11 @@ sub on_chat_key {
 }
 
 sub on_chat {
-    my ($account, $jid, $body) = @_;
+    my ($jabber, $jid, $body) = @_;
     $jid =~ s!\/.*$!!; # remove any resource suffix from JID
-    chat_add_text($account, $jid, $jid . ": " . $body);
+    my $name = $jid;
+
+    my $name = $jabber->{roster}->{$jid}->{name}
+    if(defined($jabber->{roster}->{$jid}->{name}));
+    chat_add_text($jabber, $jid, $name . ": " . $body);
 }
