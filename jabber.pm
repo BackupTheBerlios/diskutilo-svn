@@ -11,6 +11,7 @@ use Data::Dumper;
 #A coté du lien, il pourait etre affiché le nombre de membres et les
 #dernière choses qui ont été dites, tout simple, non ?
 
+
 my %accounts = ();
 
 sub new {
@@ -31,13 +32,16 @@ sub new {
 sub Connect {
     my ($this) = @_;
 
+    $SIG{ALRM} = sub { print "SIG_ALARMED\n"; };
+    alarm 1;
     if(defined $this->{connection}) {
 	print "Already connected Coco ! ($!)\n";
-	return -1;
+	return 0;
     }
     my $connection = Net::Jabber::Client->new();
-    $connection->Connect( "hostname" => $this->{hostname},
-	"port" => $this->{port} );
+    $connection->Connect ("hostname" => $this->{hostname},
+			  "port" => $this->{port},
+			  "ssl" => $this->{ssl});
     unless($connection->Connected()) {
 	print "Cannot connect gal ! ($!)\n";
 	return -1;
@@ -45,7 +49,7 @@ sub Connect {
     my @result = $connection->AuthSend( "username" => $this->{username},
 	"password" => $this->{password},
 	"resource" => $this->{resource});
-    if($result[0] ne "ok") {
+    if(not @result or $result[0] ne "ok") {
 	print "Cannot authenticate dude ! ($!)\n";
 	return -1;
     }
@@ -55,7 +59,17 @@ sub Connect {
     $connection->SetCallBacks(presence => \&jabber_callback_presence,
 			      message => \&jabber_callback_message,
 			      iq => \&jabber_callback_IQ);
+    alarm 0;
     return 0;
+}
+
+sub Process {
+    my ($this) = @_;
+
+    $SIG{ALRM} = sub { print "SIG_ALARMED\n"; };
+    alarm 1;
+    $this->{connection}->Process(0);
+    alarm 0;
 }
 
 sub Disconnect {
@@ -75,7 +89,7 @@ sub set_state {
 	$this->Disconnect();
     } else {
 	return -1 if($this->Connect() == -1);
-	if(grep {$_ eq $show} (qw(available chat dnd xa away), "")){
+	if(grep {$_ eq $show} (qw(available chat away dnd xa), "")){
 	    $this->{connection}->PresenceSend(show=>$show, status=>$status);
 	}
     }
@@ -95,8 +109,8 @@ sub add_contact {
     my ($this, $jid, $name) = @_;
     $name = $jid;# if($name eq "");
     print "JID: $jid\n";
-    $this->{connection}->RosterAdd($jid);
-    $this->{connection}->Subscription(to=>$jid, type=>"subscribe");
+    $this->{connection}->RosterAdd (jid => $jid, name => $name);
+    $this->{connection}->Subscription (to => $jid, type => "subscribe");
 }
 
 sub contact_set_name {
@@ -105,6 +119,11 @@ sub contact_set_name {
     my $iq = new Net::Jabber::IQ();
     my $query = $iq->NewQuery("jabber:iq:roster");
     $query->SetName($name);
+}
+
+sub remove_contact {
+    my ($this, $jid) = @_;
+    $this->RosterRemove(jid=>$jid);
 }
 
 sub jabber_callback_message {

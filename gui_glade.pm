@@ -15,10 +15,47 @@ use constant ROSTER_COL_TYPE => 1;
 use constant ROSTER_COL_NAME => 2;
 use constant ROSTER_COL_STATE => 3;
 
+#Hide des fenetres de chats
+#Images pour les status
+#Fenetre de Messages
+#Roster editable
+#ADD et CONFIG
+#menus a tous les étages
+
+#SSL
+#GPG
+#PROXY
+#
+
+my @diskutilo_xpm = (
+'16 16 5 1',
+'       c None',
+'.      c #050B00',
+'+      c #FAFDF9',
+'@      c #C4E1AC',
+'#      c #ACD38A',
+'       ..       ',
+'      .+@.      ',
+'     .+@@@.     ',
+'     .+@@@.     ',
+' ....+@@@@@.... ',
+'.+++@@@@@@@@@##.',
+'.+@@@@@@@@@@###.',
+' .@@@@@@@@@###. ',
+'  .@@@@@@@###.  ',
+'   .@@@@@###.   ',
+'   .#@@#####.   ',
+'  .##########.  ',
+'  .####..####.  ',
+'  .###.  .###.  ',
+'   ...    ...   ',
+'                ');
+
+
 sub ontop {
     my ($win) = @_;
-    $win->hide;
-    $win->show;
+    my $gdkwin = $win->window;
+    $gdkwin->focus(1);
 }
 
 sub new {
@@ -45,6 +82,7 @@ sub new {
     $this->{add}->{account}->{password} = $this->{glade}->get_widget ('add_account_password');
     $this->{add}->{account}->{resource} = $this->{glade}->get_widget ('add_account_resource');
     $this->{add}->{account}->{state}    = $this->{glade}->get_widget ('add_account_state');
+    $this->{add}->{account}->{ssl}      = $this->{glade}->get_widget ('add_account_ssl');
     $this->{add}->{account}->{auto_reconnect} = $this->{glade}->get_widget ('add_account_auto_reconnect');
 
     #CONFIG
@@ -56,8 +94,9 @@ sub new {
     $this->{config}->{accounts}->{username} = $this->{glade}->get_widget ('config_accounts_username');
     $this->{config}->{accounts}->{hostname} = $this->{glade}->get_widget ('config_accounts_hostname');
     $this->{config}->{accounts}->{port}     = $this->{glade}->get_widget ('config_accounts_port');
-    $this->{config}->{accounts}->{resource} = $this->{glade}->get_widget ('config_accounts_resource');
     $this->{config}->{accounts}->{password} = $this->{glade}->get_widget ('config_accounts_password');
+    $this->{config}->{accounts}->{resource} = $this->{glade}->get_widget ('config_accounts_resource');
+    $this->{config}->{accounts}->{ssl}      = $this->{glade}->get_widget ('config_accounts_ssl');
 
     #MAIN
     $this->{main}->{win} = $this->{glade}->get_widget ('main');
@@ -92,14 +131,16 @@ sub new {
     $this->{main}->{contacts}->{treeview}->show_all;
 
     $this->{icon} = Gtk2::TrayIcon->new("test");
-    $this->{icon}->add(Gtk2::Label->new("Diskutilo"));
+    my $pixbuf = Gtk2::Gdk::Pixbuf->new_from_xpm_data (@diskutilo_xpm);
+    my $image = Gtk2::Image->new_from_pixbuf ($pixbuf);
+    $this->{icon}->add($image);
     $this->{icon}->show_all;
-
+    $this->{icon}->signal_connect(event => sub{$this->on_icon_menu(@_);1});
+    $image->signal_connect(event => sub{$this->on_icon_menu(@_);1});
     $this->{chat_wins} = ();
 
     $this->{diskutilo} = $diskutilo;
-
-#    $this->load_icons("icons");
+    $this->load_icons("icons");
 
     return $this;
 }
@@ -109,11 +150,11 @@ sub load_icons {
     my $file_name = $dir_name . "/icondef.xml";
 
     my $iconset = XMLin($file_name, ForceArray => 1, KeyAttr => "x") if (-e $file_name);
-    print Dumper($iconset);
+#    print Dumper($iconset);
 
     foreach (@{$iconset->{icon}}) {
-	print $_->{content} . ": " foreach (@{$_->{object}});
-	print $_->{content} . "\n" foreach (@{$_->{x}});
+	print "object: $_->{content}: " foreach (@{$_->{object}});
+	print "x: $_->{xmlns}: $_->{content}\n" foreach (@{$_->{x}});
     }
 #    foreach (@image_names) {
 #	$this->{images}->{}, Gtk2::Gdk::Pixbuf->new_from_file (main::demo_find_file ($_));
@@ -125,11 +166,41 @@ sub main {
 }
 
 #MAIN
+sub on_icon_menu {
+    my ($this, $widget, $event) = @_;
+
+    print "on_icon_menu: " . $event->type . "\n";
+
+    return undef;
+
+    if($event->button() == 3) {
+	my $menu = Gtk2::Menu->new();
+	menu_append($menu, "Delete", sub{1});
+	my $submenu = Gtk2::Menu->new();
+	menu_append($submenu, "OffLine", sub{$this->{diskutilo}->set_state("unavailable");1});
+	menu_append($submenu, "xa", sub{$this->{diskutilo}->set_state("xa");1});
+	menu_append($submenu, "dnd", sub{$this->{diskutilo}->set_state("dnd");1});
+	menu_append($submenu, "away", sub{$this->{diskutilo}->set_state("away");1});
+	menu_append($submenu, "Chat", sub{$this->{diskutilo}->set_state("chat");1});
+	menu_append($submenu, "Online"=>sub{$this->{diskutilo}->set_state("");1});
+	menu_append($menu, "State", $submenu);
+	$menu->popup(undef, undef, undef, undef, $event->button,$event->time);
+	return 1;
+    }
+    return undef;
+}
+
 sub add_account {
     my ($this, $ajid, $name) = @_;
     $name = $ajid if(!defined($name) or $name eq "");
     my $iter = $this->{main}->{contacts}->{model}->append(undef);
     $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_ID, $ajid, ROSTER_COL_NAME, $name, ROSTER_COL_STATE, "Disconnected");
+}
+
+sub del_account {
+    my ($this, $ajid) = @_;
+    my $iter = $this->account_iter($ajid);
+    $this->{main}->{contacts}->{model}->remove ($iter);    
 }
 
 sub on_main_state_changed {
@@ -166,7 +237,14 @@ sub on_contact_presence {
     $jid =~ s!\/.*$!!;
     my $iter = $this->contact_iter($ajid, $jid);
     $iter = $this->add_contact($ajid, $jid) unless(defined($iter));
-    $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_STATE, $state);
+    if($state eq "unavailable") {
+	$this->{main}->{contacts}->{model}->remove ($iter);
+	print "PROBLEM: $jid\n" unless defined($this->{chat_wins}->{$ajid}->{$jid});
+	$this->{chat_wins}->{$ajid}->{$jid}->{win}->destroy;
+	delete $this->{chat_wins}->{$ajid}->{$jid};
+    } else {
+	$this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_STATE, $state);
+    }
 }
 
 sub on_contact_row_activated {
@@ -186,22 +264,19 @@ sub on_contact_menu {
 	my ($ajid, $jid) = $this->get_account_contact($path);
 	if(defined($ajid)) {
 	    my $menu = Gtk2::Menu->new();
-	    my $items;
 	    if(defined($jid)) {
-		$items = {"Chat" => sub{1},
-			  "Message" => sub{1},
-			  "VCard" => sub{1},
-			  "Delete" => sub{1}};
+		menu_append($menu, "Delete", sub{1});
+		menu_append($menu, "Chat", sub{$this->open_chat($ajid, $jid)});
 	    } else {
-		$items = {"State" => sub{1},
-			  "Pouet" => sub{1},
-			  "Delete" => sub{1}};
-	    }
-	    foreach (keys %{$items}) {
-		my $menuitem = Gtk2::MenuItem->new($_);
-		$menuitem->show();
-		$menu->append($menuitem);
-		$menuitem->signal_connect(activate => $items->{$_});
+		menu_append($menu, "Delete", sub{$this->{diskutilo}->del_account($ajid)});
+		my $submenu = Gtk2::Menu->new();
+		menu_append($submenu, "OffLine", sub{$this->{diskutilo}->set_account_state($ajid, "unavailable");1});
+		menu_append($submenu, "xa", sub{$this->{diskutilo}->set_account_state($ajid, "xa");1});
+		menu_append($submenu, "dnd", sub{$this->{diskutilo}->set_account_state($ajid, "dnd");1});
+		menu_append($submenu, "away", sub{$this->{diskutilo}->set_account_state($ajid, "away");1});
+		menu_append($submenu, "Chat", sub{$this->{diskutilo}->set_account_state($ajid, "chat");1});
+		menu_append($submenu, "Online"=>sub{$this->{diskutilo}->set_account_state($ajid, "");1});
+		menu_append($menu, "State", $submenu);
 	    }
 	    $menu->popup(undef, undef, undef, undef, $event->button,$event->time);
 	    return 1;
@@ -227,7 +302,6 @@ sub on_add_ok {
     my ($this) = @_;
     my $keep = 0;
     my $page = $this->{add}->{notebook}->get_current_page;
-    print "page: $page\n";
     $keep = $this->on_add_account if($page == 0);
     $keep = $this->on_add_contact if($page == 1);
     $this->{add}->{win}->hide if($keep==0);
@@ -242,6 +316,7 @@ sub on_add_account {
     $config->{port}     = $this->{add}->{account}->{port}->get_text;
     $config->{password} = $this->{add}->{account}->{password}->get_text;
     $config->{resource} = $this->{add}->{account}->{resource}->get_text;
+    $config->{ssl}      = $this->{add}->{account}->{ssl}->get_active;
 #    my $username = $this->{add}->{account}->{state}->get_text;
 #    my $username = $this->{add}->{account}->{auto_reconnect}->get_text;
     return $this->fill_it($this->{add}->{account}->{username}, "username") if($config->{username} eq "");
@@ -257,7 +332,7 @@ sub add_contact {
     my ($this, $ajid, $jid) = @_;
     my ($name) = $this->{diskutilo}->get_contact_roster_info($ajid, $jid);
     my $iter = $this->{main}->{contacts}->{model}->append($this->account_iter($ajid));
-    $name = $jid if($name eq "");
+    $name = $jid if(not defined($name) or $name eq "");
     $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_ID, $jid, ROSTER_COL_NAME, $name);
     return $iter;
 }
@@ -265,9 +340,9 @@ sub add_contact {
 #CHAT
 sub open_chat {
     my ($this, $ajid, $jid) = @_;
+
     if(exists ($this->{chat_wins}->{$ajid}->{$jid})) {
-	print "Bordel de dieux ! how to set the focus on this chat window ?!\n";
-	#$this->{chat_wins}->{$ajid}->{$jid}->focus;
+	ontop($this->{chat_wins}->{$ajid}->{$jid}->{win});
     } else {
 	my $glade = Gtk2::GladeXML->new("diskutilo-chat.glade");
 	$this->{chat_wins}->{$ajid}->{$jid}->{win} = $glade->get_widget("chat");
@@ -285,8 +360,8 @@ sub open_chat {
 
 sub on_chat_delete {
     my ($this, $ajid, $jid) = @_;
-    delete $this->{chat_wins}->{$ajid}->{$jid};
-    0;
+    $this->{chat_wins}->{$ajid}->{$jid}->{win}->hide;
+    1;
 }
 
 sub on_chat {
@@ -294,11 +369,15 @@ sub on_chat {
     my $jid = $fjid;
     $jid =~ s!\/.*$!!;
     # my ($jid) = ($fjid =~ m!^(.*)\/?.*$!);HTF I can do it ?!!
-    print "conv_append: fjid: $fjid, jid: $jid\n";
-    $this->open_chat($ajid, $jid) unless(defined($this->{chat_wins}->{$ajid}->{$jid}));
+    # print "on_chat: fjid: $fjid, jid: $jid\n";
+    $this->open_chat($ajid, $jid);
     my $buffer = $this->{chat_wins}->{$ajid}->{$jid}->{conv}->get_buffer;
     my $iter = $buffer->get_end_iter;
-    $buffer->insert($iter, $body);
+    if($jid eq $ajid) {
+	$buffer->insert($iter, "me: " . $body);
+    } else {
+	$buffer->insert($iter, "$ajid: " . $body);
+    }
     $iter = $buffer->get_end_iter;
     $buffer->insert($iter, "\n");
     $this->{chat_wins}->{$ajid}->{$jid}->{conv}->scroll_to_iter ($iter, 0, 0, 0, 0)
@@ -327,7 +406,7 @@ sub on_pad_key_release {
 	if($body ne "") {
 	    $pad->set_text("");
 	    $this->{diskutilo}->send_chat($ajid, $jid, $body);
-	    $this->conv_append($ajid, $jid, $body);
+	    $this->on_chat($ajid, $jid, $body);
 	}
 	return 1; # consume keyrelease
     }
@@ -338,8 +417,7 @@ sub on_pad_key_press {
     my ($this, $ajid, $jid, $pad, $event) = @_;
 
     if ($event->keyval == $Gtk2::Gdk::Keysyms{Escape}) {
-	$this->{chat_wins}->{$ajid}->{$jid}->{win}->destroy;
-	delete $this->{chat_wins}->{$ajid}->{$jid};
+	$this->{chat_wins}->{$ajid}->{$jid}->{win}->hide;
 	return 1; # consume keypress
     }
     return 0; # let gtk have the keypress
@@ -357,7 +435,7 @@ sub get_account_contact {
     my $iter;
     my @who;
 
-    return [] if(!defined($path));
+    return undef if(!defined($path));
 
     $iter = $this->{main}->{contacts}->{model}->get_iter ($path);
     unshift(@who, $this->{main}->{contacts}->{model}->get ($iter, ROSTER_COL_ID));
@@ -399,6 +477,20 @@ sub fill_it {
     $dialog->show_all;
     $widget->grab_focus;
     return 1;#return KEEPITOPEN
+}
+
+sub menu_append {
+    my ($menu, $name, $content) = @_;
+    my $item = Gtk2::MenuItem->new($name);
+    $menu->append($item);
+    my ($type) = ref($content);
+    if($type =~ /CODE/) {
+	$item->signal_connect(activate => $content);
+    } else {
+	$item->set_submenu($content);
+    }
+    $item->show();
+    return $item;
 }
 
 1;
