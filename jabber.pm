@@ -2,6 +2,11 @@ package jabber;
 use strict;
 use warnings;
 use Net::Jabber qw (Client);
+use Data::Dumper;
+
+#we cannot have to connections to the same account:
+# fix it by adding resource in the hash key of %account.
+
 #Imagine un lien vers une chatroom pour discuter de la page en cours
 #A coté du lien, il pourait etre affiché le nombre de membres et les
 #dernière choses qui ont été dites, tout simple, non ?
@@ -10,7 +15,7 @@ my %accounts = ();
 
 sub new
 {
-    my ($class, $config, $on_chat) = @_;
+    my ($class, $config, $on_chat, $on_presence) = @_;
     my $this = {};
     bless($this, $class);
     $this->{connection} = undef;
@@ -20,6 +25,7 @@ sub new
     $this->{password} = $config->{password};
     $this->{resource} = $config->{resource};
     $this->{on_chat} = $on_chat;
+    $this->{on_presence} = $on_presence;
 
     return $this;
 }
@@ -52,6 +58,9 @@ sub Connect {
 	return -1;
     }
 
+    my %roster = $this->{connection}->RosterGet();
+    $this->{roster} = \%roster;
+
     $this->{connection}->SetCallBacks(message => \&jabber_callback_message,
 	presence => \&jabber_callback_presence,
 	iq => \&jabber_callback_IQ);
@@ -63,13 +72,6 @@ sub Connect {
     my $jid = $this->{username}."\@".$this->{hostname};#."/".$this->{resource};
     $accounts{$jid} = $this;
     $this->{connection}->Info(name=>"Diskutilo",version=>"v1", os=>"Biduxo");
-    return 0;
-}
-
-sub Get_roster { 
-    my ($this) = @_;
-    my %roster = $this->{connection}->RosterGet();
-    $this->{roster} = \%roster;
     return 0;
 }
 
@@ -141,12 +143,21 @@ sub jabber_callback_presence
     my $sid = shift;
     my $presence = shift;
 
+    my $to = $presence->GetTo();
+    $to =~ s!\/.*$!!; # remove any resource suffix from JID
+
     my $from = $presence->GetFrom();
     my $type = $presence->GetType();
     my $status = $presence->GetStatus();
-    print "===Presence: $from: $type: $status\n";
+    my $show = $presence->GetShow();
+
+#    print Dumper($presence) if($to eq "error");
+#    print "===Presence: $from: $to: $type: $status: $show\n";
+#    print Dumper($presence) if($status eq "Online");
 #    print $presence->GetXML(),"\n";
 #    print "===\n";
+
+    $accounts{$to}->{on_presence}($accounts{$to}, $from, $type, $status, $show);
 }
 
 sub jabber_callback_IQ
@@ -159,7 +170,7 @@ sub jabber_callback_IQ
 
     my $from = $iq->GetFrom();
     my $type = $iq->GetType();
-
+    
     print "===IQ: $from: $type\n";
 
     my $query = $iq->GetQuery();
@@ -185,7 +196,6 @@ sub jabber_callback_IQ
 	    $accounts{$to}->{connection}->Send($reply);
 	}
     }
-
 #    print "XML:" .  $iq->GetXML() . "\n";
 }
 1;

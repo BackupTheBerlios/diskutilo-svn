@@ -8,6 +8,7 @@ use Gtk2 '-init'; # auto-initialize Gtk2
 use Gtk2::GladeXML;
 use Gtk2::SimpleList;   # easy wrapper for list views
 use Gtk2::Gdk::Keysyms; # keyboard code constants
+#use Gtk2::TrayIcon;
 use XML::Simple qw(:strict);
 use Data::Dumper;
 use jabber;
@@ -27,6 +28,8 @@ my $config_accounts_port;
 my $config_accounts_resource;
 my $config_accounts_password;
 my $config_accounts_state;
+
+my $config_page=0;
 
 my $add_win;
 my $add_nb;
@@ -95,28 +98,41 @@ sub init_gui {
     $main_state = $glade->get_widget('main_state');
 
     my $TV = $glade->get_widget('main_contacts');
-    $main_contacts = Gtk2::TreeStore->new ('Glib::String', 'Glib::String');
+    $main_contacts = Gtk2::TreeStore->new ('Glib::String', 'Glib::String', 'Glib::String');
     $TV->set_model ($main_contacts);
     $TV->set_rules_hint (0);
     $TV->set_search_column (0);
+
     my $renderer = Gtk2::CellRendererText->new;
+    $renderer->set("editable", 1);
+    $renderer->signal_connect (edited => \&cell_edited);
     my $column = Gtk2::TreeViewColumn->new_with_attributes ("JID", $renderer, text => 1);
     $column->set_sort_column_id (0);
     $TV->append_column ($column);
 
-    $TV->show_all;
-}
+    $renderer = Gtk2::CellRendererText->new;
+    $column = Gtk2::TreeViewColumn->new_with_attributes ("Pres", $renderer, text => 2);
+    $column->set_sort_column_id (0);
+    $TV->append_column ($column);
 
+    $TV->show_all;
+
+#    my $icon= Gtk2::TrayIcon->new("test");
+#    my $label= Gtk2::Label->new("test");
+#    $icon->add($label);
+#    $icon->show_all;
+}
+    
 sub add_account {
     my ($account) = @_;
     my $jid = $account->{username} . "\@" . $account->{hostname};
     print "Account: $jid\n";
-    $jabber->{$jid} = jabber->new($account, \&on_chat);
+    $jabber->{$jid} = jabber->new($account, \&on_chat, \&on_presence);
     my $account_iter = $main_contacts->append(undef);
     $main_contacts->set ($account_iter, 0, $jid, 1, $jid);
 }
 
-sub GUI_get_account {
+sub GUI_main_get_account {
     my ($ajid) = @_;
     my $model = $main_contacts;
     my $account = $model->get_iter_first;
@@ -129,7 +145,7 @@ sub GUI_get_account {
     return undef;
 }
 
-sub GUI_get_contact {
+sub GUI_main_get_contact {
     my ($ajid, $jid) = @_;
     my $model = $main_contacts;
     my $account = $model->get_iter_first;
@@ -137,7 +153,7 @@ sub GUI_get_contact {
 
     while(defined($account))
     {
-	print "Account STRING PATH: " . $model->get_string_from_iter($account) . "\n";
+#	print "Account STRING PATH: " . $model->get_string_from_iter($account) . "\n";
 	my $contact = $model->iter_children($account);
 
 	if($model->get ($account, 0) eq $ajid)
@@ -146,15 +162,41 @@ sub GUI_get_contact {
 	    {
 		if($model->get ($contact, 0) eq $jid)
 		{
-		    push @list, $model->get_string_from_iter($contact);
-		}		
+		    return $model->get_string_from_iter($contact);
+		    #push @list, $model->get_string_from_iter($contact);
+		}
 		$contact = $model->iter_next($contact);
 	    }
 	}
 	$account = $model->iter_next($account);
     }
 #    print Dumper(@list);
-    return @list;
+#    return @list;
+    return undef;
+}
+
+sub GUI_main_contact_update {
+    my ($ajid, $jid, $name, $state) = @_;
+    my $iter;
+
+    my $path = GUI_main_get_contact($ajid, $jid);
+    if(defined($path)) {
+	$iter = $main_contacts->get_iter_from_string ($path);
+    } else {
+	my $account_iter = $main_contacts->get_iter_from_string (GUI_main_get_account($ajid));
+	$iter = $main_contacts->append($account_iter);
+    }
+    $main_contacts->set ($iter, 0, $jid, 1, $name, 2, $state);
+}
+
+sub GUI_main_contact_remove {
+    my ($ajid, $jid) = @_;
+
+    my $path = GUI_main_get_contact($ajid, $jid);
+    if(defined($path)) {
+	my $iter = $main_contacts->get_iter_from_string ($path);
+	$main_contacts->remove ($iter);
+    }
 }
 
 sub diskutilo_connect {
@@ -165,20 +207,18 @@ sub diskutilo_connect {
     {
 	return -1 if(!defined($jabber->{$_}));
 	$jabber->{$_}->Connect() ne -1 or return -1;
-	if($jabber->{$_}->Get_roster() == -1)
-	{
-	    print "HEEEUUUERRR ! no roster !\n";
-	}
-
-	my $account_iter = $main_contacts->get_iter_from_string (GUI_get_account($_));
-	foreach my $c (keys %{$jabber->{$_}->{roster}})
-	{
+	sleep 1;
+#	my $account_iter = $main_contacts->get_iter_from_string (GUI_main_get_account($_));
+#	foreach my $c (keys %{$jabber->{$_}->{roster}})
+#	{
 #	    $roster->{$c}->{jabber} = \$jabber->{$_}->{roster}->{$c};
-	    my $iter = $main_contacts->append($account_iter);
-	    $main_contacts->get_path ($iter);
-	    $main_contacts->set ($iter, 0, $c, 1, $jabber->{$_}->{roster}->{$c}->{name});
+#	    my $name = $jabber->{$_}->{roster}->{$c}->{name};
+#	    $name = $c if($name eq "");
+#	    my $iter = $main_contacts->append($account_iter);
+#	    $main_contacts->get_path ($iter);
+#	    $main_contacts->set ($iter, 0, $c, 1, $name);
 #	    print Dumper($jabber->{$_}->{roster}->{$c});
-	}
+#	}
     }
 
     return 0;
@@ -192,7 +232,7 @@ sub diskutilo_disconnect {
     {
 	return 0 if(!defined($jabber->{$_}));
 	Glib::Source->remove($jabber->{$_}->{process_ID}) if(defined($jabber->{$_}->{process_ID}));
-	my $account_iter = $main_contacts->get_iter_from_string (GUI_get_account($_));
+	my $account_iter = $main_contacts->get_iter_from_string (GUI_main_get_account($_));
 	my $iter = $main_contacts->iter_children ($account_iter);
 	while(defined($iter))
 	{
@@ -207,12 +247,12 @@ sub diskutilo_disconnect {
 
 sub on_main_state_changed {
     my ($state) = @_;
-    if($state->get_active()==0) # State connected
-    {
+
+    my $s = $state->get_active;
+
+    if($s==0) { # State Online
 	diskutilo_connect() == 0 or $state->set_active(1);
-    }
-    elsif($state->get_active() == 1) # State disconnected
-    {
+    } elsif($s == 1) { # State disconnected
 	diskutilo_disconnect();
     }
 }
@@ -232,6 +272,61 @@ sub on_main_config_button_clicked {
 
     $config_win->show;
 #    $config_win->on_top;
+}
+
+sub config_update_account {
+    print "config accounts\n";
+    my @account_list = keys(%{$config->{accounts}});
+    my $account = $account_list[$config_accounts_account->get_activ()];
+    print "account: $account\n";
+    my $username = $config_accounts_username->get_text();
+    my $hostname = $config_accounts_hostname->get_text();
+    my $port     = $config_accounts_port->get_text();
+    my $resource = $config_accounts_resource->get_text();
+    my $password = $config_accounts_password->get_text();
+#	my $state    = $config_accounts_state->get_active();
+#	my $auto_reconnect = $config_accounts_auto_reconnect->get_active();
+
+    return fill_it($config_accounts_username, "username") if($username eq "");
+    return fill_it($config_accounts_hostname, "hostname") if($hostname eq "");
+    $port = 5222 if($port eq "");
+    $resource = "Diskutilo" if($resource eq "");
+
+    my $jid = $username . "\@" . $hostname;
+
+    $config->{accounts}=() if(!defined($config->{accounts}));
+    $config->{accounts}->{$jid}=();
+    $config->{accounts}->{$jid}->{username} = $username;
+    $config->{accounts}->{$jid}->{hostname} = $hostname;
+    $config->{accounts}->{$jid}->{port} = $port;
+    $config->{accounts}->{$jid}->{resource} = $resource;
+    $config->{accounts}->{$jid}->{password} = $password;
+#	$config->{accounts}->{$jid}->{state}    = $state;
+#	$config->{accounts}->{$jid}->{auto_reconnect} = $auto_reconnect;
+
+    config_accounts($config->{accounts}->{$jid});
+
+    XMLout($config, KeyAttr => "key", OutputFile => $config_file_name);
+}
+
+sub config_update {
+    if($config_page == 1)
+    {
+	config_update_account;
+    }
+    elsif($config_page == 2)
+    {
+	my $account = "";#$add_contact_account->get_text();
+	my $jid =     $add_contact_jid->get_text();
+	my $name =    $add_contact_name->get_text();
+	print "add contact: jid: $jid, name: $name\n";
+	$jabber->{$account}->add_contact($jid, $name);
+    }
+    elsif($config_page == 3)
+    {
+	print "add transport\n";
+    }
+    $add_win->hide;
 }
 
 sub on_config_accounts_account_changed {
@@ -274,54 +369,59 @@ sub fill_it {
     return 1;
 }
 
-sub on_add_button_clicked {
-#FIXME: Account
-#    my $jabber->{$jid} = %diskutilo->{jabber}
+sub GUI_add_account {
+    print "add account\n";
 
-    my $page = $add_nb->get_current_page;
-
-    if($page == 0)
-    {
-	print "add account\n";
-
-	my $username = $add_account_username->get_text();
-	my $hostname = $add_account_hostname->get_text();
-	my $port     = $add_account_port->get_text();
-	my $resource = $add_account_resource->get_text();
-	my $password = $add_account_password->get_text();
+    my $username = $add_account_username->get_text();
+    my $hostname = $add_account_hostname->get_text();
+    my $port     = $add_account_port->get_text();
+    my $resource = $add_account_resource->get_text();
+    my $password = $add_account_password->get_text();
 #	my $state    = $add_account_state->get_active();
 #	my $auto_reconnect = $add_account_auto_reconnect->get_active();
 
-	return fill_it($add_account_username, "username") if($username eq "");
-	return fill_it($add_account_hostname, "hostname") if($hostname eq "");
-	$port = 5222 if($port eq "");
-	$resource = "Diskutilo" if($resource eq "");
+    return fill_it($add_account_username, "username") if($username eq "");
+    return fill_it($add_account_hostname, "hostname") if($hostname eq "");
+    $port = 5222 if($port eq "");
+    $resource = "Diskutilo" if($resource eq "");
 
-	my $jid = $username . "\@" . $hostname;
+    my $jid = $username . "\@" . $hostname;
 
-	$config->{accounts}=() if(!defined($config->{accounts}));
-	$config->{accounts}->{$jid}=();
-	$config->{accounts}->{$jid}->{username} = $username;
-	$config->{accounts}->{$jid}->{hostname} = $hostname;
-	$config->{accounts}->{$jid}->{port} = $port;
-	$config->{accounts}->{$jid}->{resource} = $resource;
-	$config->{accounts}->{$jid}->{password} = $password;
+    $config->{accounts}=() if(!defined($config->{accounts}));
+    $config->{accounts}->{$jid}=();
+    $config->{accounts}->{$jid}->{username} = $username;
+    $config->{accounts}->{$jid}->{hostname} = $hostname;
+    $config->{accounts}->{$jid}->{port} = $port;
+    $config->{accounts}->{$jid}->{resource} = $resource;
+    $config->{accounts}->{$jid}->{password} = $password;
 #	$config->{accounts}->{$jid}->{state}    = $state;
 #	$config->{accounts}->{$jid}->{auto_reconnect} = $auto_reconnect;
 
-	add_account($config->{accounts}->{$jid});
+    add_account($config->{accounts}->{$jid});
 
-	XMLout($config, KeyAttr => "key", OutputFile => $config_file_name);
-    }
-    elsif($page == 1)
+    XMLout($config, KeyAttr => "key", OutputFile => $config_file_name);
+}
+
+sub GUI_add_contact {
+    my $account = "";#$add_contact_account->get_text();
+    my $jid =     $add_contact_jid->get_text();
+    my $name =    $add_contact_name->get_text();
+    print "add contact: jid: $jid, name: $name\n";
+    $jabber->{$account}->add_contact($jid, $name);
+}
+
+sub on_add_button_clicked {
+#FIXME: Account
+#    my $jabber->{$jid} = %diskutilo->{jabber}
+    if($config_page == 0)
     {
-	my $account = "";#$add_contact_account->get_text();
-	my $jid =     $add_contact_jid->get_text();
-	my $name =    $add_contact_name->get_text();
-	print "add contact: jid: $jid, name: $name\n";
-	$jabber->{$account}->add_contact($jid, $name);
+	GUI_add_account;
     }
-    if($page == 2)
+    elsif($config_page == 1)
+    {
+	GUI_add_contact;
+    }
+    elsif($config_page == 2)
     {
 	print "add transport\n";
     }
@@ -352,8 +452,8 @@ sub open_chat {
     my $chat = Gtk2::Window->new;
     $chat->signal_connect (delete_event => \&on_chat_delete, [$jabber, $jid]);
 #$chat->signal_connect (destroy_event => \&on_chat_delete, [$jabber, $jid]);
-    $chat->set_title ("Chat with $jid");
-    $chat->set_size_request(200, 200);
+    $chat->set_title ("$jid");
+    $chat->set_size_request(300, 300);
     my $vbox = Gtk2::VBox->new;
     $chat->add($vbox);
     my $scroller = Gtk2::ScrolledWindow->new;
@@ -395,7 +495,7 @@ sub on_main_contacts_row_activated {
 	print "ajid: $ajid\n";
 	open_chat($jabber->{$ajid}, $jid);
     }
-    return 1; # consume event
+#    return 1; # consume event
 }
 
 sub chat_add_text {
@@ -413,7 +513,6 @@ sub chat_add_text {
 sub on_chat_key {
     my ($widget, $event, $data) = @_;
     my ($jabber, $jid) = @{$data};
-
     my $keypress = $event->keyval;    
     if ($keypress == $Gtk2::Gdk::Keysyms{KP_Enter} ||
         $keypress == $Gtk2::Gdk::Keysyms{Return}){
@@ -426,7 +525,6 @@ sub on_chat_key {
 	}
 	return 1; # consume keypress
     }
-
     if ($keypress == $Gtk2::Gdk::Keysyms{Escape}) {
 	$chat_wins{$jid}[0]->destroy;
 	delete $chat_wins{$jid};
@@ -435,11 +533,47 @@ sub on_chat_key {
     return 0; # let gtk have the keypress
 }
 
+sub contact_name {
+    my ($jabber, $jid) = @_;
+
+    if($jabber->{roster}->{$jid}->{name} ne "") {
+	return $jabber->{roster}->{$jid}->{name};
+    } else {
+	return $jid;
+    }
+}
+
 sub on_chat {
     my ($jabber, $jid, $body) = @_;
     $jid =~ s!\/.*$!!; # remove any resource suffix from JID
-    my $name = $jid;
-
-    $name = $jabber->{roster}->{$jid}->{name} if(defined($jabber->{roster}->{$jid}->{name}));
+    my $name = contact_name($jabber, $jid);
     chat_add_text($jabber, $jid, $name . ": " . $body);
+}
+
+sub on_presence {
+    my ($jabber, $jid, $type, $status, $show) = @_;
+    $jid =~ s!\/.*$!!; # remove any resource suffix from JID
+
+    my $ajid = $jabber->{username} . "\@" . $jabber->{hostname};
+    my $name = contact_name($jabber, $jid);
+
+    print "===Presence: $jabber: $jid: $type: $status: $show\n";
+
+    if($type eq ""){
+	if($show eq ""){
+	    print "$jid is Online: $status\n";
+	}elsif($show eq "chat"){
+	    print "$jid is chat: $status\n";
+	}elsif($show eq "dnd"){
+	    print "$jid is DND: $status\n";
+	}elsif($show eq "xa"){
+	    print "$jid is XA: $status\n";
+	}elsif($show eq "away"){
+	    print "$jid is away: $status\n";
+	}
+	GUI_main_contact_update($ajid, $jid, $name, $status);
+    }elsif($type eq "unavailable"){
+	    print "$jid is unavailable: $status\n";
+	    GUI_main_contact_remove($ajid, $jid);
+    }
 }
