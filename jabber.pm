@@ -32,7 +32,7 @@ sub new {
 sub Connect {
     my ($this) = @_;
 
-    $SIG{ALRM} = sub { print "SIG_ALARMED\n"; };
+    $SIG{ALRM} = sub { print "SIG_ALARMED\n"; 1 };
     alarm 1;
     if(defined $this->{connection}) {
 	print "Already connected Coco ! ($!)\n";
@@ -40,8 +40,7 @@ sub Connect {
     }
     my $connection = Net::Jabber::Client->new();
     $connection->Connect ("hostname" => $this->{hostname},
-			  "port" => $this->{port},
-			  "ssl" => $this->{ssl});
+			  "port" => $this->{port});
     unless($connection->Connected()) {
 	print "Cannot connect gal ! ($!)\n";
 	return -1;
@@ -63,9 +62,18 @@ sub Connect {
     return 0;
 }
 
+sub show_jabber {
+    my ($show) = @_;
+    if(grep {$_ eq $show} qw(online chat away dnd xa offline)){
+	return "" if($show eq "online");
+	return "unavailable" if($show eq "offline");
+    }
+}
+
 sub Process {
     my ($this) = @_;
 
+    #workaround NET::Jabber hangs
     $SIG{ALRM} = sub { print "SIG_ALARMED\n"; };
     alarm 1;
     $this->{connection}->Process(0);
@@ -85,12 +93,12 @@ sub Disconnect {
 sub set_state {
     my ($this, $show, $status) = @_;
 
-    if($show eq "unavailable") {
+    if($show eq "offline") {
 	$this->Disconnect();
     } else {
 	return -1 if($this->Connect() == -1);
-	if(grep {$_ eq $show} (qw(available chat away dnd xa), "")){
-	    $this->{connection}->PresenceSend(show=>$show, status=>$status);
+	if(grep {$_ eq $show} qw(available chat away dnd xa online)){
+	    $this->{connection}->PresenceSend(show=>show_jabber($show), status=>$status);
 	}
     }
     return 0;
@@ -140,6 +148,9 @@ sub jabber_callback_message {
     my $subject = $message->GetSubject();
     my $body = $message->GetBody();
 
+    $type = "message" if($type eq "normal");
+    $type = "message" unless($type);
+
     $accounts{$to}->{diskutilo}->on_contact_message($to, $from, $type, $body, $subject);
 }
 
@@ -163,9 +174,13 @@ sub jabber_callback_presence {
     my $state = "unknown";
     #print "===Presence: $from: $to: [$type-$status-$show]\n";
     if($type eq "unavailable") {
-	$state = "unavailable";
+	$state = "offline";
     } elsif($type eq "") {
-	$state = $show;
+	if($show eq "") {
+	    $state = "online";
+	} else {
+	    $state = $show;
+	}
     } elsif($type eq "error") {
 	return;
     } else {

@@ -1028,7 +1028,7 @@ Disconnected
 		  </child>
 
 		  <child>
-		    <widget class="GtkEntry" id="add_account_username">
+		    <widget class="GtkEntry" id="add_account_jid">
 		      <property name="visible">True</property>
 		      <property name="can_focus">True</property>
 		      <property name="editable">True</property>
@@ -1101,7 +1101,7 @@ Disconnected
 	      </child>
 
 	      <child>
-		<widget class="GtkFrame" id="frame4">
+		<widget class="GtkFrame" id="frameX">
 		  <property name="visible">True</property>
 		  <property name="label_xalign">0</property>
 		  <property name="label_yalign">0.5</property>
@@ -1120,8 +1120,9 @@ Disconnected
 		      <property name="right_padding">0</property>
 
 		      <child>
-			<widget class="GtkTable" id="table5">
+			<widget class="GtkTable" id="add_account_advanced_settings">
 			  <property name="visible">True</property>
+			  <property name="sensitive">False</property>
 			  <property name="n_rows">4</property>
 			  <property name="n_columns">2</property>
 			  <property name="homogeneous">False</property>

@@ -10,13 +10,12 @@ use gui_glade;
 use XML::Simple qw(:strict);
 
 my $config_file_name="config";
-
 my $diskutilo = main->new;
 $diskutilo->{config} = $diskutilo->read_config($config_file_name);
 $diskutilo->{gui} = gui_glade->new($diskutilo->{config}->{gui}, $diskutilo);
 if(defined($diskutilo->{config}->{accounts})) {
     foreach (keys(%{$diskutilo->{config}->{accounts}})) {	
-	$diskutilo->add_account($_, $diskutilo->{config}->{accounts}->{$_});
+	$this->{gui}->add_account($ajid, $config->{name}, sub{$this->{jabber}->{$ajid}->Process;1});
     }
 }
 $diskutilo->{gui}->main;
@@ -59,22 +58,24 @@ sub set_account_state {
     my ($this, $ajid, $state) = @_;
     return -1 if(!defined($this->{jabber}->{$ajid}));
     return -1 if($this->{jabber}->{$ajid}->set_state($state, "") == -1);
-    $this->{gui}->set_account_state($ajid, $state, sub { $this->{jabber}->{$ajid}->Process;1});
+    $this->{gui}->set_account_state($ajid, $state);
     return 0;
 }
 
-sub del_account {
+sub remove_account {
     my ($this, $ajid) = @_;
-    $this->set_account_state($ajid, "unavailable");
-    $this->{gui}->del_account($ajid);
+    $this->set_account_state($ajid, "offline");
+    $this->{gui}->remove_account($ajid);
     delete($this->{config}->{accounts}->{$ajid});
     XMLout($this->{config}, KeyAttr => "key", OutputFile => $config_file_name);
 }
 
 #CONTACT
-sub get_contact_roster_info {
+sub get_contact_name {
     my ($this, $ajid, $jid) = @_;
-    return ($this->{jabber}->{$ajid}->{roster}->{$jid}->{name});
+    my $name = $this->{jabber}->{$ajid}->{roster}->{$jid}->{name};
+    $name = $jid unless($name);
+    return ($name);
 }
 
 sub send_chat {
@@ -85,9 +86,11 @@ sub send_chat {
 sub on_contact_message {
     my ($this, $ajid, $fjid, $type, $body, $subject) = @_;
 
-    $this->{gui}->on_chat($ajid, $fjid, $body) if($type eq "chat");
-    $this->{gui}->on_message($ajid, $fjid, $subject, $body) if($type eq "message");
-    $this->{gui}->on_headline($ajid, $fjid, $subject, $body) if($type eq "headline");
+    $this->{gui}->on_chat($ajid, $fjid, $fjid, $body) if($type eq "chat");
+    print "type: $type\n";
+    $this->{gui}->on_message($ajid, $fjid, $fjid, $subject, $body) if($type eq "message");
+    $this->{gui}->on_headline($ajid, $fjid, $fjid, $subject, $body) if($type eq "headline");
+
 }
 
 sub remove_contact {

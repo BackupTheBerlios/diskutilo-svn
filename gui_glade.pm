@@ -75,19 +75,23 @@ sub new {
     $this->{add}->{ok} = $this->{glade}->get_widget('add_ok');
     $this->{add}->{ok}->signal_connect (clicked => sub{$this->on_add_ok;1});
 
+    #ADD_ACCOUNT
+    $this->{add}->{account}->{jid}      = $this->{glade}->get_widget ('add_account_jid');
+    $this->{add}->{account}->{jid}->signal_connect(key_release_event => sub{$this->on_add_account_jid;1});
+    $this->{add}->{account}->{password} = $this->{glade}->get_widget ('add_account_password');
+    $this->{add}->{account}->{advanced} = $this->{glade}->get_widget ('add_account_advanced');
+    $this->{add}->{account}->{advanced}->signal_connect (pressed => sub{$this->on_add_account_advanced(@_);1;});
+    $this->{add}->{account}->{advanced_settings} = $this->{glade}->get_widget ('add_account_advanced_settings');
+    $this->{add}->{account}->{hostname} = $this->{glade}->get_widget ('add_account_hostname');
+    $this->{add}->{account}->{port}     = $this->{glade}->get_widget ('add_account_port');
+    $this->{add}->{account}->{resource} = $this->{glade}->get_widget ('add_account_resource');
+    $this->{add}->{account}->{state}    = $this->{glade}->get_widget ('add_account_state');
+    $this->{add}->{account}->{ssl}      = $this->{glade}->get_widget ('add_account_ssl');
+#    $this->{add}->{account}->{auto_reconnect} = $this->{glade}->get_widget ('add_account_auto_reconnect');
     #ADD_CONTACT
     $this->{add}->{contact}->{jid}   = $this->{glade}->get_widget ('add_contact_jid');
     $this->{add}->{contact}->{name}  = $this->{glade}->get_widget ('add_contact_name');
     $this->{add}->{contact}->{group} = $this->{glade}->get_widget ('add_contact_group');
-    #ADD_ACCOUNT
-    $this->{add}->{account}->{username} = $this->{glade}->get_widget ('add_account_username');
-    $this->{add}->{account}->{hostname} = $this->{glade}->get_widget ('add_account_hostname');
-    $this->{add}->{account}->{port}     = $this->{glade}->get_widget ('add_account_port');
-    $this->{add}->{account}->{password} = $this->{glade}->get_widget ('add_account_password');
-    $this->{add}->{account}->{resource} = $this->{glade}->get_widget ('add_account_resource');
-    $this->{add}->{account}->{state}    = $this->{glade}->get_widget ('add_account_state');
-    $this->{add}->{account}->{ssl}      = $this->{glade}->get_widget ('add_account_ssl');
-    $this->{add}->{account}->{auto_reconnect} = $this->{glade}->get_widget ('add_account_auto_reconnect');
 
     #CONFIG
     $this->{config}->{win} = $this->{glade}->get_widget ('config');
@@ -95,7 +99,7 @@ sub new {
     $this->{config}->{notebook} = $this->{glade}->get_widget ('config_NB');
     #CONFIG_ACCOUNTS
     $this->{config}->{accounts}->{account}  = $this->{glade}->get_widget ('config_accounts_account');
-    $this->{config}->{accounts}->{username} = $this->{glade}->get_widget ('config_accounts_username');
+    $this->{config}->{accounts}->{jid}      = $this->{glade}->get_widget ('config_accounts_jid');
     $this->{config}->{accounts}->{hostname} = $this->{glade}->get_widget ('config_accounts_hostname');
     $this->{config}->{accounts}->{port}     = $this->{glade}->get_widget ('config_accounts_port');
     $this->{config}->{accounts}->{password} = $this->{glade}->get_widget ('config_accounts_password');
@@ -122,25 +126,31 @@ sub new {
 
     #Roster
     $this->{main}->{contacts}->{treeview}->set_model ($this->{main}->{contacts}->{model});
-    #ROSTER:COLUMN 1
-    my $renderer = Gtk2::CellRendererText->new;
-    my $column = Gtk2::TreeViewColumn->new_with_attributes ("Name", $renderer, text => ROSTER_COL_NAME);
+    #ROSTER:COLUMN STATE
+    my $renderer = Gtk2::CellRendererPixbuf->new;
+    my $column = Gtk2::TreeViewColumn->new_with_attributes ("State", $renderer); 
+    
     $this->{main}->{contacts}->{treeview}->append_column ($column);
-    #ROSTER:COLUMN 2
+    #ROSTER:COLUMN NAME/ID
     $renderer = Gtk2::CellRendererText->new;
-    $column = Gtk2::TreeViewColumn->new_with_attributes ("State", $renderer, text => ROSTER_COL_STATE);
+    $column = Gtk2::TreeViewColumn->new_with_attributes ("Name", $renderer, 'text' => ROSTER_COL_NAME);
     $this->{main}->{contacts}->{treeview}->append_column ($column);
     #
     $this->{main}->{contacts}->{treeview}->signal_connect_after (button_release_event => sub{$this->on_contact_menu(@_);1});
     $this->{main}->{contacts}->{treeview}->show_all;
 
-    $this->{icon} = Gtk2::TrayIcon->new("test");
+    # create tray icon
+    my $icon = Gtk2::TrayIcon->new('Diskutilo');
+    my $iconEB = Gtk2::EventBox->new;
+    # attach event to tray icon to show menu
+    $iconEB->signal_connect("button-release-event", sub{$this->on_icon_menu(@_);1});
+    # adding tray icon image
     my $pixbuf = Gtk2::Gdk::Pixbuf->new_from_xpm_data (@diskutilo_xpm);
     my $image = Gtk2::Image->new_from_pixbuf ($pixbuf);
-    $this->{icon}->add($image);
-    $this->{icon}->show_all;
-    $this->{icon}->signal_connect(event => sub{$this->on_icon_menu(@_);1});
-    $image->signal_connect(event => sub{$this->on_icon_menu(@_);1});
+    $iconEB->add($image);
+    $icon->add($iconEB);
+    $icon->show_all;
+
     $this->{chat_wins} = ();
 
     $this->{diskutilo} = $diskutilo;
@@ -149,20 +159,24 @@ sub new {
     return $this;
 }
 
+#piano russe orovitz
+
 sub load_icons {
     my ($this, $dir_name) = @_;
     my $file_name = $dir_name . "/icondef.xml";
 
-    my $iconset = XMLin($file_name, ForceArray => 1, KeyAttr => "x") if (-e $file_name);
+#    my $iconset = XMLin($file_name, ForceArray => 1, KeyAttr => "x") if (-e $file_name);
 #    print Dumper($iconset);
 
-    foreach (@{$iconset->{icon}}) {
-	print "object: $_->{content}: " foreach (@{$_->{object}});
-	print "x: $_->{xmlns}: $_->{content}\n" foreach (@{$_->{x}});
-    }
-#    foreach (@image_names) {
-#	$this->{images}->{}, Gtk2::Gdk::Pixbuf->new_from_file (main::demo_find_file ($_));
+#    foreach (@{$iconset->{icon}}) {
+#	print "object: $_->{content}: " foreach (@{$_->{object}});
+#	print "x: $_->{xmlns}: $_->{content}\n" foreach (@{$_->{x}});
 #    }
+
+    foreach (qw/offline xa dnd away chat online/) {
+	my $pixbuf = Gtk2::Gdk::Pixbuf->new_from_file ($_.".png");
+	$this->{state_icon}->{$_} = \$pixbuf;
+    }
 }
 
 sub main {
@@ -175,18 +189,17 @@ sub on_icon_menu {
 
     print "on_icon_menu: " . $event->type . "\n";
     #afficher les properties.
-    return undef;
 
     if($event->button() == 3) {
 	my $menu = Gtk2::Menu->new();
-	menu_append($menu, "Delete", sub{1});
+	menu_append($menu, "Quit", sub{1});
 	my $submenu = Gtk2::Menu->new();
-	menu_append($submenu, "OffLine", sub{$this->{diskutilo}->set_state("unavailable");1});
+	menu_append($submenu, "OffLine", sub{$this->{diskutilo}->set_state("offline");1});
 	menu_append($submenu, "xa", sub{$this->{diskutilo}->set_state("xa");1});
 	menu_append($submenu, "dnd", sub{$this->{diskutilo}->set_state("dnd");1});
 	menu_append($submenu, "away", sub{$this->{diskutilo}->set_state("away");1});
 	menu_append($submenu, "Chat", sub{$this->{diskutilo}->set_state("chat");1});
-	menu_append($submenu, "Online"=>sub{$this->{diskutilo}->set_state("");1});
+	menu_append($submenu, "Online"=>sub{$this->{diskutilo}->set_state("online");1});
 	menu_append($menu, "State", $submenu);
 	$menu->popup(undef, undef, undef, undef, $event->button,$event->time);
 	return 1;
@@ -198,7 +211,7 @@ sub add_account {
     my ($this, $ajid, $name) = @_;
     $name = $ajid if(!defined($name) or $name eq "");
     my $iter = $this->{main}->{contacts}->{model}->append(undef);
-    $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_ID, $ajid, ROSTER_COL_NAME, $name, ROSTER_COL_STATE, "Disconnected");
+    $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_ID, $ajid, ROSTER_COL_NAME, $name);
 }
 
 sub del_account {
@@ -209,14 +222,15 @@ sub del_account {
 
 sub on_main_state_changed {
     my ($this, $widget) = @_;
-    my $states = { 0 => "", 1 => "chat", 2 => "dnd", 3 => "xa", 4 => "away", 5 => "unavailable"};
+    my $states = { 0 => "online", 1 => "chat", 2 => "dnd", 3 => "xa", 4 => "away", 5 => "offline"};
     $this->{diskutilo}->set_global_state($states->{$widget->get_active});
 }
 
 sub set_account_state {
     my ($this, $ajid, $state, $process) = @_;
     my $iter = $this->account_iter($ajid);
-    $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_STATE, $state);
+
+#    $this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_STATE, $this->{state_icon}->{$state});
 
     if($state eq "unavailable") {
 	#FIXME: update chat wins
@@ -243,11 +257,12 @@ sub on_contact_presence {
     $iter = $this->add_contact($ajid, $jid) unless(defined($iter));
     if($state eq "unavailable") {
 	$this->{main}->{contacts}->{model}->remove ($iter);
-	print "PROBLEM: $jid\n" unless defined($this->{chat_wins}->{$ajid}->{$jid});
-	$this->{chat_wins}->{$ajid}->{$jid}->{win}->destroy;
-	delete $this->{chat_wins}->{$ajid}->{$jid};
+	if(defined($this->{chat_wins}->{$ajid}->{$jid})) {
+	    $this->{chat_wins}->{$ajid}->{$jid}->{win}->destroy;
+	    delete $this->{chat_wins}->{$ajid}->{$jid};
+	}
     } else {
-	$this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_STATE, $state);
+#	$this->{main}->{contacts}->{model}->set ($iter, ROSTER_COL_STATE, $this->{state_icon}->{$state});
     }
 }
 
@@ -274,12 +289,12 @@ sub on_contact_menu {
 	    } else {
 		menu_append($menu, "Delete", sub{$this->{diskutilo}->del_account($ajid)});
 		my $submenu = Gtk2::Menu->new();
-		menu_append($submenu, "OffLine", sub{$this->{diskutilo}->set_account_state($ajid, "unavailable");1});
+		menu_append($submenu, "OffLine", sub{$this->{diskutilo}->set_account_state($ajid, "offline");1});
 		menu_append($submenu, "xa", sub{$this->{diskutilo}->set_account_state($ajid, "xa");1});
 		menu_append($submenu, "dnd", sub{$this->{diskutilo}->set_account_state($ajid, "dnd");1});
 		menu_append($submenu, "away", sub{$this->{diskutilo}->set_account_state($ajid, "away");1});
 		menu_append($submenu, "Chat", sub{$this->{diskutilo}->set_account_state($ajid, "chat");1});
-		menu_append($submenu, "Online"=>sub{$this->{diskutilo}->set_account_state($ajid, "");1});
+		menu_append($submenu, "Online"=>sub{$this->{diskutilo}->set_account_state($ajid, "online");1});
 		menu_append($menu, "State", $submenu);
 	    }
 	    $menu->popup(undef, undef, undef, undef, $event->button,$event->time);
@@ -319,19 +334,50 @@ sub on_add_ok {
     return 1;
 }
 
+sub on_add_account_advanced {
+    my ($this) = @_;
+
+    if($this->{add}->{account}->{advanced}->get_active == 0) {
+	$this->{add}->{account}->{advanced_settings}->set_sensitive(1);
+    } else {
+	$this->{add}->{account}->{advanced_settings}->set_sensitive(0);
+    }
+}
+
+sub on_add_account_jid {
+    my ($this, $pad, $event) = @_;
+
+    if($this->{add}->{account}->{advanced}->get_active == 0) {
+	my $jid = $this->{add}->{account}->{jid}->get_text;
+	my ($username,$hostname,$port,$resource) = JID2UHPR($jid);
+	$this->{add}->{account}->{hostname}->set_text($hostname) if($hostname);
+	$this->{add}->{account}->{port}->set_text($port) if($port);
+	$this->{add}->{account}->{resource}->set_text($resource) if($resource);
+    }
+}
+
 sub on_add_account {
     my ($this) = @_;
     my $config = ();
-    $config->{username} = $this->{add}->{account}->{username}->get_text;
+
+    my $jid = $this->{add}->{account}->{jid}->get_text;
+    my ($username,$hostname,$port,$resource) = JID2UHPR($jid);
+
+    $this->{add}->{account}->{hostname}->set_text($hostname) if($hostname);
+    $this->{add}->{account}->{port}->set_text($port) if($port);
+    $this->{add}->{account}->{resource}->set_text($resource) if($resource);
+
+    $config->{username} = $username;
     $config->{hostname} = $this->{add}->{account}->{hostname}->get_text;
+    $config->{hostname} = $hostname if(!$config->{hostname} and $hostname);
     $config->{port}     = $this->{add}->{account}->{port}->get_text;
+    $config->{port}     = $port if(!$config->{port} and $port);
     $config->{password} = $this->{add}->{account}->{password}->get_text;
     $config->{resource} = $this->{add}->{account}->{resource}->get_text;
+    $config->{resource} = $resource if(!$config->{resource} and $resource);
     $config->{ssl}      = $this->{add}->{account}->{ssl}->get_active;
-#    my $username = $this->{add}->{account}->{state}->get_text;
-#    my $username = $this->{add}->{account}->{auto_reconnect}->get_text;
-    return $this->fill_it($this->{add}->{account}->{username}, "username") if($config->{username} eq "");
-    return $this->fill_it($this->{add}->{account}->{hostname}, "hostname") if($config->{hostname} eq "");
+    return $this->fill_it($this->{add}->{account}->{jid}, "Jabber ID") if(!$username or !$hostname);
+    return $this->fill_it($this->{add}->{account}->{hostname}, "Hostname") if($config->{hostname} eq "");
     $config->{port} = 5222 if($config->{port} eq "");
 
     my $ajid = $config->{username} . "\@" . $config->{hostname};
@@ -502,6 +548,12 @@ sub menu_append {
     }
     $item->show();
     return $item;
+}
+
+sub JID2UHPR {
+    my ($jid) = @_;
+
+    return ($jid =~ m/^([\w.]+)\@([\w.]+)\:?(\d+)?\/?(\w+)?$/);
 }
 
 1;
